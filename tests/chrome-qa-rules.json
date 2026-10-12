@@ -1,0 +1,48 @@
+{
+  "rules": [
+    {
+      "id": "qa-alpha",
+      "name": "QA Alpha",
+      "enabled": true,
+      "target": "title",
+      "mode": "contains",
+      "pattern": "QA_ALPHA",
+      "groupTitle": "QA Alpha",
+      "color": "blue",
+      "scope": "allWindows",
+      "minTabs": 1,
+      "createdAt": 1,
+      "updatedAt": 1
+    },
+    {
+      "id": "qa-beta",
+      "name": "QA Beta",
+      "enabled": true,
+      "target": "title",
+      "mode": "contains",
+      "pattern": "QA_BETA",
+      "groupTitle": "QA Beta",
+      "color": "red",
+      "scope": "allWindows",
+      "minTabs": 1,
+      "createdAt": 1,
+      "updatedAt": 1
+    }
+  ],
+  "preferences": {
+    "autoGroupOnCreate": false,
+    "autoGroupOnUpdate": true,
+    "organizeScope": "allWindows",
+    "autoDeduplicateTabs": false,
+    "deduplicateOnOrganize": false,
+    "autoHibernateTabs": false,
+    "autoCollapseGroups": true,
+    "domainFallbackGrouping": false,
+    "syncRules": false,
+    "openInSidePanel": false,
+    "languageMode": "en",
+    "themeMode": "light",
+    "newTabDashboardEnabled": false,
+    "uiDensity": "compact"
+  }
+}

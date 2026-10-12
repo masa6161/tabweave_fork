@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TabWeave popup preview</title>
+  </head>
+  <body style="margin: 0; width: 420px; height: 600px; overflow: hidden">
+    <div id="root"></div>
+    <script type="module">
+      import { createChromeMock, makeTab, makeRule } from './chrome-mock.mjs'
+      const fixture = createChromeMock({
+        tabs: [makeTab(1, 10, 'Research paper'), makeTab(2, 10, 'Inbox'), makeTab(3, 20, 'Research project')],
+        preferences: {
+          languageMode: 'en',
+          themeMode: new URLSearchParams(location.search).get('theme') === 'light' ? 'light' : 'dark',
+          uiDensity: 'compact', autoGroupOnUpdate: true, domainFallbackGrouping: false, organizeScope: 'allWindows',
+        },
+        rules: [makeRule('research', 'Research'), makeRule('mail', 'Inbox', 'Mail')],
+      })
+      window.chrome = fixture.chrome
+      await import('../src/background.ts')
+      await import('../src/popup.tsx')
+    </script>
+  </body>
+</html>

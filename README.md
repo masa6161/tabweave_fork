@@ -106,6 +106,8 @@ Run regression tests with Node.js 24:
 npm test
 ```
 
+With the dev server running, open `/tests/popup-preview.html` for a popup preview with simulated Chrome APIs. Add `?theme=light` for the light theme. This preview does not operate on your browser's actual tabs.
+
 The Vite dev server is useful for React page development. Chrome extension APIs require loading the built `dist` directory in Chrome.
 
 ## Build

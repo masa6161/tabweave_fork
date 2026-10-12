@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QA_ALPHA</title>
+    <style>
+      body { font: 16px system-ui; max-width: 700px; margin: 48px auto; padding: 24px; }
+      button { font: inherit; padding: 12px 20px; margin: 8px 8px 8px 0; }
+      code { overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body>
+    <h1>TabWeave title change check</h1>
+    <p>Each button changes only the document title. The URL stays the same.</p>
+    <p>Window: <strong id="window-label"></strong></p>
+    <p>Title: <strong id="title-value"></strong></p>
+    <p>URL: <code id="url-value"></code></p>
+    <button data-title="QA_ALPHA">Set Alpha title</button>
+    <button data-title="QA_BETA">Set Beta title</button>
+    <button data-title="QA_UNMATCHED">Set unmatched title</button>
+    <p id="result" aria-live="polite">Ready</p>
+    <script>
+      const label = new URLSearchParams(location.search).get('window') ?? 'A'
+      document.getElementById('window-label').textContent = label
+      document.getElementById('url-value').textContent = location.href
+      function setTitle(value) {
+        document.title = `${value} window ${label}`
+        document.getElementById('title-value').textContent = document.title
+        document.getElementById('result').textContent = `Changed title to ${document.title}; URL unchanged.`
+      }
+      document.querySelectorAll('[data-title]').forEach((button) => {
+        button.addEventListener('click', () => setTitle(button.dataset.title))
+      })
+      setTitle('QA_ALPHA')
+    </script>
+  </body>
+</html>
