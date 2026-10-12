@@ -1,4 +1,5 @@
 import { LEGACY_AI_GROUPING_PROMPT } from './legacy-localization'
+import { UPSTREAM_DOCS_PATTERN } from './upstream-chinese'
 import type { AiGroupingProvider, AiGroupingSettings, AutoGroupRule, ChromeGroupColor, Preferences } from './types'
 
 export const STORAGE_KEYS = {
@@ -45,7 +46,8 @@ export const DEFAULT_AI_GROUPING_PROMPT_JA = [
 
 export const DEFAULT_AI_GROUPING_PROMPT = DEFAULT_AI_GROUPING_PROMPT_EN
 
-export function getDefaultAiGroupingPrompt(lang: 'ja' | 'en'): string {
+export function getDefaultAiGroupingPrompt(lang: 'ja' | 'en' | 'zh'): string {
+  if (lang === 'zh') return LEGACY_AI_GROUPING_PROMPT
   return lang === 'ja' ? DEFAULT_AI_GROUPING_PROMPT_JA : DEFAULT_AI_GROUPING_PROMPT_EN
 }
 
@@ -156,7 +158,7 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
     enabled: true,
     target: 'title',
     mode: 'regex',
-    pattern: '(docs|documentation|ドキュメント|資料|ガイド|マニュアル|リファレンス|guide|manual|reference)',
+    pattern: `(?:${UPSTREAM_DOCS_PATTERN}|ドキュメント|資料|ガイド|マニュアル|リファレンス)`,
     groupTitle: 'Docs',
     color: 'cyan',
     scope: 'currentWindow',

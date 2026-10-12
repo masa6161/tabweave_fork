@@ -21,7 +21,7 @@ Highlights:
 - Command search for open tabs, groups, history, and built-in actions
 - Duplicate tab cleanup, tab hibernation, and snooze-friendly workflows
 - Optional AI grouping with provider-specific local API key storage
-- Light/dark themes, Japanese/English UI, and Chrome shortcut support
+- Light/dark themes, Japanese/English/Chinese UI, and Chrome shortcut support
 
 Privacy:
 

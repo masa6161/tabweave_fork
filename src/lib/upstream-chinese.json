@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/zxpzdtom/tabweave",
+  "revision": "55351a9c249e71eae44a6af47b015129b7a7bdb1",
+  "hashes": {
+    "src/lib/upstream-chinese.ts": "ee0108bdd04044f97e8b005f848b69278f2ed6b543dd496199f17f76ac4ec911",
+    "public/_locales/zh_CN/messages.json": "fb6a108b99d0de1222bdabe1b0b9f1ae5fa18a61de700140613c2035c577990f",
+    "README.zh-CN.md": "d80e64e912a9d1e72cf1c84bcd07cdc2eafb77fbc526dd388cfe666934bb32c3"
+  }
+}

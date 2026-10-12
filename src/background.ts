@@ -488,7 +488,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void getPreferences()
       .then((preferences) => {
         const t = getMessages(preferences.languageMode)
-        const dateLocale = resolveLanguage(preferences.languageMode) === 'ja' ? 'ja-JP' : 'en-US'
+        const dateLocale = resolveLanguage(preferences.languageMode) === 'ja' ? 'ja-JP' : resolveLanguage(preferences.languageMode) === 'zh' ? 'zh-CN' : 'en-US'
         sendResponse({
           ok: true,
           copy: {

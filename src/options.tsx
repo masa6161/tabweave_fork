@@ -43,6 +43,7 @@ const LANGUAGE_OPTIONS: { value: LanguageMode; label: string }[] = [
   { value: 'system', label: 'A' },
   { value: 'ja', label: 'JA' },
   { value: 'en', label: 'EN' },
+  { value: 'zh', label: '中' },
 ]
 
 const UI_DENSITY_OPTIONS: { value: UiDensity }[] = [
@@ -1329,7 +1330,7 @@ export function Options() {
               </div>
               <div className="flex rounded-xl bg-zinc-900/70 p-1 ring-1 ring-white/10" aria-label="Language">
                 {LANGUAGE_OPTIONS.map((option) => {
-                  const label = option.value === 'system' ? t.languageSystem : option.value === 'ja' ? t.languageJa : t.languageEn
+                  const label = option.value === 'system' ? t.languageSystem : option.value === 'ja' ? t.languageJa : option.value === 'zh' ? t.languageZh : t.languageEn
                   return (
                     <Tooltip key={option.value} content={label} delay={240}>
                       <button

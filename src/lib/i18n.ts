@@ -1,6 +1,7 @@
 import type { LanguageMode } from './types'
+import { UPSTREAM_ZH } from './upstream-chinese'
 
-export type Language = 'ja' | 'en'
+export type Language = 'ja' | 'en' | 'zh'
 
 const en = {
   appTagline: 'Rule-driven tab grouping',
@@ -13,6 +14,7 @@ const en = {
   themeSystem: 'Follow system theme',
   languageSystem: 'Follow browser language',
   languageJa: 'Japanese',
+  languageZh: 'Chinese',
   languageEn: 'English',
   uiDensity: 'Interface density',
   uiDensityDefault: 'Default density',
@@ -356,6 +358,7 @@ const ja: typeof en = {
   themeSystem: 'システムのテーマに合わせる',
   languageSystem: 'ブラウザの言語に合わせる',
   languageJa: '日本語',
+  languageZh: '中国語',
   languageEn: 'English',
   uiDensity: '表示の密度',
   uiDensityDefault: '標準',
@@ -688,16 +691,21 @@ const ja: typeof en = {
 }
 
 export function resolveLanguage(mode: LanguageMode): Language {
-  if (mode === 'ja' || mode === 'en') return mode
-  return typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en'
+  if (mode === 'ja' || mode === 'en' || mode === 'zh') return mode
+  const browserLanguage = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : ''
+  if (browserLanguage.startsWith('ja')) return 'ja'
+  return browserLanguage.startsWith('zh') ? 'zh' : 'en'
 }
 
 export function getLanguageName(mode: LanguageMode) {
-  return resolveLanguage(mode) === 'ja' ? 'Japanese' : 'English'
+  const lang = resolveLanguage(mode)
+  return lang === 'ja' ? 'Japanese' : lang === 'zh' ? 'Chinese' : 'English'
 }
 
 export function getMessages(mode: LanguageMode) {
-  return resolveLanguage(mode) === 'ja' ? ja : en
+  const lang = resolveLanguage(mode)
+  if (lang === 'zh') return { ...en, ...UPSTREAM_ZH }
+  return lang === 'ja' ? ja : en
 }
 
 export function applyLanguage(mode: LanguageMode, optionsPage = false) {

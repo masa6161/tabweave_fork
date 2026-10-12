@@ -2,7 +2,7 @@ export type MatchTarget = 'url' | 'title' | 'domain'
 export type MatchMode = 'contains' | 'regex' | 'equals'
 export type RuleScope = 'currentWindow' | 'allWindows'
 export type ThemeMode = 'dark' | 'light' | 'system'
-export type LanguageMode = 'system' | 'ja' | 'en'
+export type LanguageMode = 'system' | 'ja' | 'en' | 'zh'
 export type UiDensity = 'default' | 'compact'
 export type AiGroupingProvider = 'openai' | 'openrouter' | 'gemini' | 'compatible' | 'chromeBuiltIn'
 

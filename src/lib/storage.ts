@@ -1,7 +1,8 @@
 import { DEFAULT_AI_GROUPING_MODELS, DEFAULT_AI_GROUPING_SETTINGS, DEFAULT_PREFERENCES, DEFAULT_RULES, STORAGE_KEYS, getDefaultAiGroupingPrompt, isDefaultAiGroupingPrompt } from './constants'
 import type { AiGroupingSettings, AutoGroupRule, HibernateResult, LanguageMode, Preferences, SessionSnapshot, SnoozeItem } from './types'
-import { resolveLanguage, type Language } from './i18n'
+import { getMessages, resolveLanguage, type Language } from './i18n'
 import { LEGACY_DEFAULT_RULE_NAMES, LEGACY_DOCS_PATTERN } from './legacy-localization'
+import { UPSTREAM_ZH } from './upstream-chinese'
 
 const hasChromeStorage = () => typeof chrome !== 'undefined' && Boolean(chrome.storage)
 
@@ -15,8 +16,7 @@ async function setRulesArea(sync: boolean, rules: AutoGroupRule[]) {
   await (await getArea(sync)).set({ [STORAGE_KEYS.rules]: rules })
 }
 
-type LegacyPreferences = Omit<Partial<Preferences>, 'languageMode'> & {
-  languageMode?: LanguageMode | 'zh'
+type LegacyPreferences = Partial<Preferences> & {
   domainGroupMinTabs?: number
   newTabSearchEngine?: string
   newTabCustomSearchUrl?: string
@@ -30,7 +30,7 @@ type LegacyAiGroupingSettings = Partial<AiGroupingSettings> & {
 export function normalizePreferences(preferences?: LegacyPreferences): Preferences {
   const groupMinTabs = preferences?.groupMinTabs ?? preferences?.domainGroupMinTabs ?? DEFAULT_PREFERENCES.groupMinTabs
   const hibernateAfterMinutes = Math.max(1, Math.floor(Number(preferences?.hibernateAfterMinutes ?? DEFAULT_PREFERENCES.hibernateAfterMinutes)))
-  const languageMode = preferences?.languageMode === 'zh' ? 'ja' : preferences?.languageMode ?? DEFAULT_PREFERENCES.languageMode
+  const languageMode = preferences?.languageMode ?? DEFAULT_PREFERENCES.languageMode
   const currentPreferences: Partial<Preferences> = { ...preferences, languageMode }
   delete (currentPreferences as LegacyPreferences).domainGroupMinTabs
   delete (currentPreferences as LegacyPreferences).newTabSearchEngine
@@ -164,9 +164,9 @@ function normalizeRule(rule: AutoGroupRule): AutoGroupRule {
     rule = {
       ...rule,
       name: isLegacyName ? defaultRule.name : rule.name,
-      pattern: isLegacyDocs && rule.pattern === LEGACY_DOCS_PATTERN ? defaultRule.pattern : rule.pattern,
+      pattern: isLegacyDocs && isPreviousDocsPattern(rule.pattern) ? defaultRule.pattern : rule.pattern,
       conditions: isLegacyDocs ? rule.conditions?.map((condition) => (
-        condition.target === 'title' && condition.mode === 'regex' && condition.pattern === LEGACY_DOCS_PATTERN
+        condition.target === 'title' && condition.mode === 'regex' && isPreviousDocsPattern(condition.pattern)
           ? { ...condition, pattern: defaultRule.pattern }
           : condition
       )) : rule.conditions,
@@ -234,6 +234,20 @@ function normalizeSavedRules(rules: AutoGroupRule[]): AutoGroupRule[] {
   return rules.map(normalizeRule)
 }
 
+function isPreviousDocsPattern(pattern: string) {
+  return pattern === LEGACY_DOCS_PATTERN || pattern === '(docs|documentation|ドキュメント|資料|ガイド|マニュアル|リファレンス|guide|manual|reference)'
+}
+
+function localizeDefaultRuleNames(rules: AutoGroupRule[], mode: LanguageMode): AutoGroupRule[] {
+  if (resolveLanguage(mode) !== 'zh') return rules
+  return rules.map((rule) => {
+    const defaultRule = DEFAULT_RULES.find((item) => item.id === rule.id)
+    return defaultRule && rule.name === defaultRule.name && LEGACY_DEFAULT_RULE_NAMES[rule.id]
+      ? { ...rule, name: LEGACY_DEFAULT_RULE_NAMES[rule.id] }
+      : rule
+  })
+}
+
 function mergeRulesByPreferredOrder(primaryRules: AutoGroupRule[], secondaryRules: AutoGroupRule[]) {
   const secondaryById = new Map(secondaryRules.map((rule) => [rule.id, normalizeRule(rule)]))
   const primaryById = new Map(primaryRules.map((rule) => [rule.id, normalizeRule(rule)]))
@@ -249,33 +263,34 @@ function mergeRulesByPreferredOrder(primaryRules: AutoGroupRule[], secondaryRule
 }
 
 export async function getRules(): Promise<AutoGroupRule[]> {
+  const preferences = await getPreferences()
+  const present = (rules: AutoGroupRule[]) => localizeDefaultRuleNames(rules, preferences.languageMode)
   if (!hasChromeStorage()) {
     if (localFallback.has(STORAGE_KEYS.rules)) {
       const savedRules = localFallback.get(STORAGE_KEYS.rules)
-      return Array.isArray(savedRules) ? normalizeSavedRules(savedRules as AutoGroupRule[]) : []
+      return Array.isArray(savedRules) ? present(normalizeSavedRules(savedRules as AutoGroupRule[])) : []
     }
-    return mergeDefaultRules(DEFAULT_RULES)
+    return present(mergeDefaultRules(DEFAULT_RULES))
   }
-  const preferences = await getPreferences()
   const primaryArea = await getArea(preferences.syncRules)
   const secondaryArea = await getArea(!preferences.syncRules)
   const [primary, secondary] = await Promise.all([primaryArea.get(STORAGE_KEYS.rules), secondaryArea.get(STORAGE_KEYS.rules)])
   const primaryRules = primary[STORAGE_KEYS.rules]
   const secondaryRules = secondary[STORAGE_KEYS.rules]
   if (Array.isArray(primaryRules)) {
-    return normalizeSavedRules(primaryRules as AutoGroupRule[])
+    return present(normalizeSavedRules(primaryRules as AutoGroupRule[]))
   }
   if (Array.isArray(secondaryRules)) {
-    return normalizeSavedRules(secondaryRules as AutoGroupRule[])
+    return present(normalizeSavedRules(secondaryRules as AutoGroupRule[]))
   }
   const rules = mergeRulesByPreferredOrder(
     Array.isArray(primaryRules) ? primaryRules as AutoGroupRule[] : [],
     Array.isArray(secondaryRules) ? secondaryRules as AutoGroupRule[] : [],
   )
   if (rules.length > 0) {
-    return mergeDefaultRules(rules)
+    return present(mergeDefaultRules(rules))
   }
-  return mergeDefaultRules(DEFAULT_RULES)
+  return present(mergeDefaultRules(DEFAULT_RULES))
 }
 
 export async function saveRules(rules: AutoGroupRule[]): Promise<void> {
@@ -297,7 +312,7 @@ export async function saveRules(rules: AutoGroupRule[]): Promise<void> {
 export async function resetRules(): Promise<AutoGroupRule[]> {
   const restored = mergeDefaultRules(DEFAULT_RULES)
   await saveRules(restored)
-  return restored
+  return getRules()
 }
 
 export async function getLastHibernateResult(): Promise<HibernateResult | undefined> {
@@ -332,7 +347,9 @@ export async function getSnapshots(): Promise<SessionSnapshot[]> {
   const items = hasChromeStorage()
     ? (await chrome.storage.local.get(STORAGE_KEYS.snapshots))[STORAGE_KEYS.snapshots] as SessionSnapshot[] | undefined
     : localFallback.get(STORAGE_KEYS.snapshots) as SessionSnapshot[] | undefined
-  return (items ?? []).map((item) => ({ ...item, name: item.name.replace(/^快照 (\d{2}\/\d{2} \d{2}:\d{2})$/, 'スナップショット $1') }))
+  const t = getMessages((await getPreferences()).languageMode)
+  const automaticName = new RegExp(`^(?:${UPSTREAM_ZH.newTabSnapshots}|スナップショット|Snapshots) (\\d{2}/\\d{2} \\d{2}:\\d{2})$`)
+  return (items ?? []).map((item) => ({ ...item, name: item.name.replace(automaticName, `${t.newTabSnapshots} $1`) }))
 }
 
 export async function saveSnapshots(items: SessionSnapshot[]): Promise<void> {

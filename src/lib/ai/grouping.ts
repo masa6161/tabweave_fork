@@ -1,3 +1,4 @@
+import { UPSTREAM_AI_EXAMPLE } from '../upstream-chinese'
 import { generateText, Output } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { z } from 'zod/v4'
@@ -228,8 +229,8 @@ function formatPageContextForPrompt(context: AiGroupingPageContext | undefined) 
 function buildPrompt(tabs: AiGroupingTabInput[], settings: AiGroupingSettings, preferences: Preferences) {
   const language = getLanguageName(preferences.languageMode)
   const minTabs = preferences.groupMinTabs
-  const exampleTitle = language === 'Japanese' ? '開発' : 'Code'
-  const exampleReason = language === 'Japanese' ? '同じ開発作業に関連するタブです。' : 'These tabs support the same development task.'
+  const exampleTitle = language === 'Japanese' ? '開発' : language === 'Chinese' ? UPSTREAM_AI_EXAMPLE.title : 'Code'
+  const exampleReason = language === 'Japanese' ? '同じ開発作業に関連するタブです。' : language === 'Chinese' ? UPSTREAM_AI_EXAMPLE.reason : 'These tabs support the same development task.'
   const customPrompt = renderPromptTemplate(settings.customPrompt, {
     language,
     minTabs: String(minTabs),
