@@ -7,7 +7,7 @@ import { COLOR_CLASS, STORAGE_KEYS } from './lib/constants'
 import { getAiGroupingSettings, getLastHibernateResult, getPreferences, getRules, isWindowAutoGroupingEnabled, saveRules } from './lib/storage'
 import { applyTheme } from './lib/theme'
 import { GITHUB_ISSUES_URL, getExtensionVersion, openExternalUrl } from './lib/links'
-import { getMessages } from './lib/i18n'
+import { applyLanguage, getMessages } from './lib/i18n'
 import { createGroupFromTabs, getCurrentWindowSnapshot } from './lib/grouping'
 import type { AiGroupingPlan, AiGroupingSettings, AutoGroupRule, HibernateResult, LanguageMode, Preferences, RuleCondition, TabSnapshot, WindowSnapshot } from './lib/types'
 import { EmptyState, GhostButton, PrimaryButton, Switch, TextInput } from './components/ui'
@@ -121,6 +121,9 @@ export function Popup() {
   const [aiError, setAiError] = useState('')
   const [languageMode, setLanguageMode] = useState<LanguageMode>('system')
 
+  useEffect(() => {
+    applyLanguage(languageMode)
+  }, [languageMode])
   const [preferences, setPreferences] = useState<Preferences | null>(null)
   const [aiSettings, setAiSettings] = useState<AiGroupingSettings | null>(null)
   const [aiPlan, setAiPlan] = useState<AiGroupingPlan | null>(null)

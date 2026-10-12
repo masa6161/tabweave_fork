@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.zh-CN.md">中文文档</a> ·
+  <a href="./README.ja.md">日本語ドキュメント</a> ·
   <a href="https://chromewebstore.google.com/detail/tabweave/pmfoefbiapldlpljfpjienjahdfmefej">Chrome Web Store</a> ·
   <a href="./PRIVACY.md">Privacy Policy</a> ·
   <a href="./CHANGELOG.md">Changelog</a>
@@ -27,7 +27,7 @@ TabWeave is a Chrome extension for keeping tab groups clean with rule-based auto
 - **Window automation control**. Pause automatic grouping for individual windows from the popup or side panel.
 - **Title update detection**. Recheck title rules even when the page URL stays the same.
 - **Dark, light, and system themes**.
-- **Chinese / English UI**, defaulting to the browser language.
+- **Japanese / English UI**, defaulting to the browser language. Previously saved Chinese language settings migrate to Japanese.
 - **Chrome command shortcuts** for opening the popup, organizing the current window, closing duplicate tabs, and opening Command search.
 - **Command search** for jumping to open tabs, tab groups, history entries, and built-in cleanup commands.
 - **Tab snooze**: schedule tabs or groups to close now and reopen at a specified time, with optional daily recurrence.
@@ -156,7 +156,7 @@ src/
   lib/
     constants.ts         Default rules, colors, storage keys
     grouping.ts          Rule matching, grouping, reconciliation
-    i18n.ts              Chinese / English messages
+    i18n.ts              Japanese / English messages
     links.ts             GitHub and extension metadata links
     shortcuts.ts         Platform-aware shortcut formatting
     storage.ts           chrome.storage wrapper

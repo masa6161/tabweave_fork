@@ -9,7 +9,7 @@ import { COLOR_CLASS, STORAGE_KEYS } from './lib/constants'
 import { getAiGroupingSettings, getPreferences, getRules } from './lib/storage'
 import { applyTheme } from './lib/theme'
 import { openExternalUrl } from './lib/links'
-import { getMessages } from './lib/i18n'
+import { applyLanguage, getMessages } from './lib/i18n'
 import {
   applyRulesToTabs,
   collapseGroupsByScope,
@@ -1146,7 +1146,7 @@ function SnapshotDetailView({ snapshot, onRestore, onDelete, onUpdate, t }: {
 
   return (
     <section className="mt-4">
-      {/* 快照信息头 */}
+      {/* Snapshot header */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold tracking-[-0.03em] text-zinc-100">{formatSnapshotDate(snapshot.createdAt, t)}</h2>
         <span className="text-xs text-zinc-500">
@@ -1482,6 +1482,10 @@ export function NewTab() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   const t = getMessages(preferences?.languageMode ?? 'system')
+
+  useEffect(() => {
+    applyLanguage(preferences?.languageMode ?? 'system')
+  }, [preferences?.languageMode])
 
   const refreshSnoozedTabs = useCallback(async () => {
     if (!runtimeAvailable()) return
@@ -2087,7 +2091,7 @@ export function NewTab() {
           )}
         </header>
 
-        {/* Tab Bar: Dashboard + 快照列表 */}
+        {/* Tab Bar: Dashboard + snapshot list */}
         <nav className="mt-5 -mx-1 flex items-center gap-1 overflow-x-auto px-1 py-1">
           <button
             type="button"
@@ -2117,7 +2121,7 @@ export function NewTab() {
               </svg>
               <span className="max-w-[120px] truncate">{formatSnapshotDate(s.createdAt, t)}</span>
               <span className="tabular-nums text-zinc-600">{s.tabs.length}</span>
-              {/* 关闭/删除 tab */}
+              {/* Close/delete tab */}
               {confirmDeleteSnapshotId === s.id ? (
                 <span
                   role="button"
@@ -2145,7 +2149,7 @@ export function NewTab() {
           ))}
         </nav>
 
-        {/* Dashboard 视图 */}
+        {/* Dashboard view */}
         {activeTabId === 'dashboard' && (
         <>
         <section className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500">
@@ -2288,7 +2292,7 @@ export function NewTab() {
         </>
         )}
 
-        {/* 快照详情视图 */}
+        {/* Snapshot details view */}
         {activeTabId !== 'dashboard' && (() => {
           const activeSnapshot = snapshots.find((s) => s.id === activeTabId)
           if (!activeSnapshot) return null
@@ -2452,7 +2456,7 @@ export function NewTab() {
           )}
         </AnimatePresence>
 
-        {/* 快照恢复确认 Modal */}
+        {/* Snapshot restore confirmation modal */}
         <AnimatePresence>
           {restoreTarget !== null && (
             <motion.div

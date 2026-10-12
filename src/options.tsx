@@ -9,7 +9,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities'
 import './index.css'
 import { COLOR_CLASS, DEFAULT_AI_GROUPING_MODELS, DEFAULT_AI_GROUPING_PROMPT, DEFAULT_AI_GROUPING_SETTINGS, DEFAULT_GEMINI_AI_GROUPING_MODEL, DEFAULT_GROUP_MIN_TABS, DEFAULT_HIBERNATE_AFTER_MINUTES, GROUP_COLORS, OPENROUTER_AI_GROUPING_MODEL_PLACEHOLDER, STORAGE_KEYS, getDefaultAiGroupingPrompt, isDefaultAiGroupingPrompt } from './lib/constants'
-import { getAiGroupingSettings, getPreferences, getRules, parseAiGroupingApiKeys, resetRules, saveAiGroupingSettings, savePreferences, saveRules } from './lib/storage'
+import { getAiGroupingSettings, getPreferences, getRules, normalizePreferences, parseAiGroupingApiKeys, resetRules, saveAiGroupingSettings, savePreferences, saveRules } from './lib/storage'
 import { applyTheme } from './lib/theme'
 import { formatShortcut } from './lib/shortcuts'
 import { CHROME_WEB_STORE_URL, GITHUB_ISSUES_URL, GITHUB_REPO_URL, getExtensionVersion, openExternalUrl } from './lib/links'
@@ -25,7 +25,7 @@ import {
 } from './lib/grouping'
 import type { AiGroupingProvider, AiGroupingSettings, AutoGroupRule, LanguageMode, MatchMode, MatchTarget, Preferences, RuleCondition, ShortcutInfo, ThemeMode, UiDensity } from './lib/types'
 import { AnchorSelect, DangerButton, FieldLabel, GhostButton, PrimaryButton, Switch, TextArea, TextInput, Tooltip } from './components/ui'
-import { getLanguageName, getMessages, resolveLanguage } from './lib/i18n'
+import { applyLanguage, getLanguageName, getMessages, resolveLanguage } from './lib/i18n'
 
 
 const now = () => Date.now()
@@ -41,7 +41,7 @@ const THEME_ICON_OPTIONS: { value: ThemeMode }[] = [
 
 const LANGUAGE_OPTIONS: { value: LanguageMode; label: string }[] = [
   { value: 'system', label: 'A' },
-  { value: 'zh', label: '中' },
+  { value: 'ja', label: 'JA' },
   { value: 'en', label: 'EN' },
 ]
 
@@ -204,7 +204,7 @@ function DensityIcon({ density }: { density: UiDensity }) {
   )
 }
 
-function createRule(name = '新规则'): AutoGroupRule {
+function createRule(name: string): AutoGroupRule {
   return {
     id: crypto.randomUUID(),
     name,
@@ -260,7 +260,7 @@ function getAiPromptVariables(appLanguage: LanguageMode, minTabs: number) {
   return {
     language,
     minTabs: String(minTabs),
-    tabCount: '当前标签数量',
+    tabCount: getMessages(appLanguage).aiPromptTabCount,
   }
 }
 
@@ -637,6 +637,10 @@ export function Options() {
 
   const selectedRule = useMemo(() => rules.find((rule) => rule.id === selectedId) ?? rules[0], [rules, selectedId])
   const t = getMessages(preferences.languageMode)
+
+  useEffect(() => {
+    applyLanguage(preferences.languageMode, true)
+  }, [preferences.languageMode])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const normalizedRuleQuery = ruleQuery.trim().toLowerCase()
   const filteredRules = useMemo(() => {
@@ -1151,16 +1155,17 @@ export function Options() {
   async function replaceWithImportedRules(importedRules: AutoGroupRule[], importedPreferences?: Preferences) {
     cancelPendingDebouncedSaves()
     if (importedPreferences) {
-      const nextPreferences = { ...preferences, ...importedPreferences }
+      const nextPreferences = normalizePreferences({ ...preferences, ...importedPreferences })
       setPreferences(nextPreferences)
       setGroupMinTabsDraft(String(nextPreferences.groupMinTabs))
       applyTheme(nextPreferences.themeMode)
       await trackSave(() => savePreferences(nextPreferences))
     }
-    setRules(importedRules)
-    setSelectedId(importedRules[0]?.id ?? '')
-    setSelectedRuleIds([])
     await trackSave(() => saveRules(importedRules))
+    const savedRules = await getRules()
+    setRules(savedRules)
+    setSelectedId(savedRules[0]?.id ?? '')
+    setSelectedRuleIds([])
     setStatus(t.importDone)
   }
 
@@ -1324,7 +1329,7 @@ export function Options() {
               </div>
               <div className="flex rounded-xl bg-zinc-900/70 p-1 ring-1 ring-white/10" aria-label="Language">
                 {LANGUAGE_OPTIONS.map((option) => {
-                  const label = option.value === 'system' ? t.languageSystem : option.value === 'zh' ? t.languageZh : t.languageEn
+                  const label = option.value === 'system' ? t.languageSystem : option.value === 'ja' ? t.languageJa : t.languageEn
                   return (
                     <Tooltip key={option.value} content={label} delay={240}>
                       <button

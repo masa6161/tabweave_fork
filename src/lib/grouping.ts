@@ -1,6 +1,7 @@
 import type { AutoGroupRule, GroupSnapshot, RuleCondition, RuleScope, TabSnapshot, WindowSnapshot } from './types'
 import { DEFAULT_GROUP_MIN_TABS, DEFAULT_RULE_IDS, GROUP_COLORS } from './constants'
-import { isWindowAutoGroupingEnabled } from './storage'
+import { getPreferences, isWindowAutoGroupingEnabled } from './storage'
+import { getMessages } from './i18n'
 
 export type GroupingOptions = {
   automatic?: boolean
@@ -381,16 +382,18 @@ function compareRecentUngroupedTabs(a: TabSnapshot, b: TabSnapshot) {
 
 export async function getCurrentWindowSnapshot(windowId?: number): Promise<WindowSnapshot> {
   windowId ??= await getTargetWindowId()
-  const [tabs, groups] = await Promise.all([
+  const [tabs, groups, preferences] = await Promise.all([
     typeof windowId === 'number' ? chrome.tabs.query({ windowId }) : chrome.tabs.query({ currentWindow: true }),
     typeof windowId === 'number' ? chrome.tabGroups.query({ windowId }) : chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
+    getPreferences(),
   ])
+  const t = getMessages(preferences.languageMode)
 
   const tabSnapshots: TabSnapshot[] = tabs
     .filter((tab): tab is chrome.tabs.Tab & { id: number } => typeof tab.id === 'number')
     .map((tab) => ({
       id: tab.id,
-      title: tab.title || 'Untitled',
+      title: tab.title || t.commandUntitled,
       url: tab.url || '',
       favIconUrl: tab.favIconUrl,
       groupId: tab.groupId ?? UNGROUPED_ID,
@@ -401,7 +404,7 @@ export async function getCurrentWindowSnapshot(windowId?: number): Promise<Windo
 
   const grouped: GroupSnapshot[] = groups.map((group) => ({
     id: group.id,
-    title: group.title || '未命名分组',
+    title: group.title || t.commandUntitledGroup,
     color: group.color,
     collapsed: Boolean(group.collapsed),
     tabs: tabSnapshots.filter((tab) => tab.groupId === group.id),

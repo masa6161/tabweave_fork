@@ -1,0 +1,8 @@
+{
+  "extensionName": { "message": "TabWeave" },
+  "extensionDescription": { "message": "Chrome のタブグループを管理し、ドメイン・キーワード・正規表現のルールでタブを自動整理します。" },
+  "commandOpenPopup": { "message": "TabWeave を開く" },
+  "commandOrganizeTabs": { "message": "タブを今すぐ整理" },
+  "commandDeduplicateTabs": { "message": "重複タブを今すぐ閉じる" },
+  "commandOpenSearch": { "message": "コマンド検索を開く" }
+}

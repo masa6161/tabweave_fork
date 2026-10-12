@@ -1,5 +1,7 @@
 import { DEFAULT_AI_GROUPING_MODELS, DEFAULT_AI_GROUPING_SETTINGS, DEFAULT_PREFERENCES, DEFAULT_RULES, STORAGE_KEYS, getDefaultAiGroupingPrompt, isDefaultAiGroupingPrompt } from './constants'
 import type { AiGroupingSettings, AutoGroupRule, HibernateResult, LanguageMode, Preferences, SessionSnapshot, SnoozeItem } from './types'
+import { resolveLanguage, type Language } from './i18n'
+import { LEGACY_DEFAULT_RULE_NAMES, LEGACY_DOCS_PATTERN } from './legacy-localization'
 
 const hasChromeStorage = () => typeof chrome !== 'undefined' && Boolean(chrome.storage)
 
@@ -13,7 +15,8 @@ async function setRulesArea(sync: boolean, rules: AutoGroupRule[]) {
   await (await getArea(sync)).set({ [STORAGE_KEYS.rules]: rules })
 }
 
-type LegacyPreferences = Partial<Preferences> & {
+type LegacyPreferences = Omit<Partial<Preferences>, 'languageMode'> & {
+  languageMode?: LanguageMode | 'zh'
   domainGroupMinTabs?: number
   newTabSearchEngine?: string
   newTabCustomSearchUrl?: string
@@ -24,10 +27,11 @@ type LegacyAiGroupingSettings = Partial<AiGroupingSettings> & {
   outputLanguage?: LanguageMode
 }
 
-function normalizePreferences(preferences?: LegacyPreferences): Preferences {
+export function normalizePreferences(preferences?: LegacyPreferences): Preferences {
   const groupMinTabs = preferences?.groupMinTabs ?? preferences?.domainGroupMinTabs ?? DEFAULT_PREFERENCES.groupMinTabs
   const hibernateAfterMinutes = Math.max(1, Math.floor(Number(preferences?.hibernateAfterMinutes ?? DEFAULT_PREFERENCES.hibernateAfterMinutes)))
-  const currentPreferences: Partial<Preferences> = { ...(preferences ?? {}) }
+  const languageMode = preferences?.languageMode === 'zh' ? 'ja' : preferences?.languageMode ?? DEFAULT_PREFERENCES.languageMode
+  const currentPreferences: Partial<Preferences> = { ...preferences, languageMode }
   delete (currentPreferences as LegacyPreferences).domainGroupMinTabs
   delete (currentPreferences as LegacyPreferences).newTabSearchEngine
   delete (currentPreferences as LegacyPreferences).newTabCustomSearchUrl
@@ -46,11 +50,12 @@ export async function getPreferences(): Promise<Preferences> {
 }
 
 export async function savePreferences(preferences: Preferences): Promise<void> {
+  const normalized = normalizePreferences(preferences)
   if (!hasChromeStorage()) {
-    localFallback.set(STORAGE_KEYS.preferences, preferences)
+    localFallback.set(STORAGE_KEYS.preferences, normalized)
     return
   }
-  await chrome.storage.sync.set({ [STORAGE_KEYS.preferences]: preferences })
+  await chrome.storage.sync.set({ [STORAGE_KEYS.preferences]: normalized })
 }
 
 function getWindowAutoGroupingKey(windowId: number) {
@@ -81,7 +86,7 @@ export async function clearWindowAutoGroupingState(windowId: number): Promise<vo
   await setWindowAutoGroupingEnabled(windowId, true)
 }
 
-function normalizeAiGroupingSettings(settings?: LegacyAiGroupingSettings, lang: 'zh' | 'en' = 'en'): AiGroupingSettings {
+function normalizeAiGroupingSettings(settings?: LegacyAiGroupingSettings, lang: Language = 'en'): AiGroupingSettings {
   const provider = settings?.provider ?? DEFAULT_AI_GROUPING_SETTINGS.provider
   const apiKeys = { ...(settings?.apiKeys ?? {}) }
   if (settings?.apiKey && !apiKeys[provider]) apiKeys[provider] = settings.apiKey
@@ -107,22 +112,16 @@ function normalizeAiGroupingSettings(settings?: LegacyAiGroupingSettings, lang: 
   }
 }
 
-function resolveStorageLanguage(mode?: LanguageMode): 'zh' | 'en' {
-  if (mode === 'zh' || mode === 'en') return mode
-  if (typeof navigator !== 'undefined') return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
-  return 'en'
-}
-
 export async function getAiGroupingSettings(): Promise<AiGroupingSettings> {
   const preferences = await getPreferences()
-  const lang = resolveStorageLanguage(preferences.languageMode)
+  const lang = resolveLanguage(preferences.languageMode)
   if (!hasChromeStorage()) return normalizeAiGroupingSettings(localFallback.get(STORAGE_KEYS.aiGroupingSettings) as LegacyAiGroupingSettings | undefined, lang)
   const result = await chrome.storage.local.get(STORAGE_KEYS.aiGroupingSettings)
   return normalizeAiGroupingSettings(result[STORAGE_KEYS.aiGroupingSettings] as LegacyAiGroupingSettings | undefined, lang)
 }
 
 export async function saveAiGroupingSettings(settings: AiGroupingSettings, languageMode?: LanguageMode): Promise<void> {
-  const lang = resolveStorageLanguage(languageMode)
+  const lang = resolveLanguage(languageMode ?? (await getPreferences()).languageMode)
   const normalized = normalizeAiGroupingSettings(settings, lang)
   if (!hasChromeStorage()) {
     localFallback.set(STORAGE_KEYS.aiGroupingSettings, normalized)
@@ -158,11 +157,26 @@ export async function consumeAiGroupingApiKey(settings: AiGroupingSettings): Pro
 }
 
 function normalizeRule(rule: AutoGroupRule): AutoGroupRule {
+  const defaultRule = DEFAULT_RULES.find((item) => item.id === rule.id)
+  if (defaultRule) {
+    const isLegacyName = rule.name === LEGACY_DEFAULT_RULE_NAMES[rule.id]
+    const isLegacyDocs = rule.id === 'docs-default' && rule.target === 'title' && rule.mode === 'regex'
+    rule = {
+      ...rule,
+      name: isLegacyName ? defaultRule.name : rule.name,
+      pattern: isLegacyDocs && rule.pattern === LEGACY_DOCS_PATTERN ? defaultRule.pattern : rule.pattern,
+      conditions: isLegacyDocs ? rule.conditions?.map((condition) => (
+        condition.target === 'title' && condition.mode === 'regex' && condition.pattern === LEGACY_DOCS_PATTERN
+          ? { ...condition, pattern: defaultRule.pattern }
+          : condition
+      )) : rule.conditions,
+    }
+  }
   const migratedRule =
     rule.id === 'chrome-management-default'
       ? {
           ...rule,
-          name: 'Chrome 与扩展页面',
+          name: rule.name || 'Chrome と拡張のページ',
           target: 'url' as const,
           mode: 'regex' as const,
           pattern: '^chrome-extension://|^chrome://(?!newtab/?$)',
@@ -172,7 +186,7 @@ function normalizeRule(rule: AutoGroupRule): AutoGroupRule {
       : rule.id === 'video-default'
         ? {
             ...rule,
-            name: rule.name || '视频与流媒体',
+            name: rule.name || '動画と配信',
             target: 'url' as const,
             mode: 'regex' as const,
             pattern: '(youtube\\.com|youtu\\.be|netflix\\.com|vimeo\\.com|twitch\\.tv)\n(bilibili\\.com|douyin\\.com|kuaishou\\.com|iqiyi\\.com|youku\\.com)',
@@ -315,9 +329,10 @@ export async function saveSnoozedTabs(items: SnoozeItem[]): Promise<void> {
 }
 
 export async function getSnapshots(): Promise<SessionSnapshot[]> {
-  if (!hasChromeStorage()) return (localFallback.get(STORAGE_KEYS.snapshots) as SessionSnapshot[] | undefined) ?? []
-  const result = await chrome.storage.local.get(STORAGE_KEYS.snapshots)
-  return (result[STORAGE_KEYS.snapshots] as SessionSnapshot[] | undefined) ?? []
+  const items = hasChromeStorage()
+    ? (await chrome.storage.local.get(STORAGE_KEYS.snapshots))[STORAGE_KEYS.snapshots] as SessionSnapshot[] | undefined
+    : localFallback.get(STORAGE_KEYS.snapshots) as SessionSnapshot[] | undefined
+  return (items ?? []).map((item) => ({ ...item, name: item.name.replace(/^快照 (\d{2}\/\d{2} \d{2}:\d{2})$/, 'スナップショット $1') }))
 }
 
 export async function saveSnapshots(items: SessionSnapshot[]): Promise<void> {

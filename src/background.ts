@@ -488,7 +488,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void getPreferences()
       .then((preferences) => {
         const t = getMessages(preferences.languageMode)
-        const dateLocale = resolveLanguage(preferences.languageMode) === 'zh' ? 'zh-CN' : 'en-US'
+        const dateLocale = resolveLanguage(preferences.languageMode) === 'ja' ? 'ja-JP' : 'en-US'
         sendResponse({
           ok: true,
           copy: {
@@ -604,7 +604,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       const now = new Date()
       const pad = (n: number) => String(n).padStart(2, '0')
-      const name = `快照 ${pad(now.getMonth() + 1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+      const t = getMessages((await getPreferences()).languageMode)
+      const name = `${t.newTabSnapshots} ${pad(now.getMonth() + 1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
 
       const snapshotTabs = tabs
         .filter((tab) => tab.url && tab.url !== 'chrome://newtab/' && tab.url !== 'chrome://newtab')
@@ -653,16 +654,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const snapshot = snapshots.find((s) => s.id === snapshotId)
       if (!snapshot) { sendResponse({ ok: false, error: 'Snapshot not found' }); return }
 
-      // 在新窗口中恢复快照
+      // Restore the snapshot in a new window
       const newWindow = await chrome.windows.create({ focused: true })
       if (!newWindow?.id) { sendResponse({ ok: false, error: 'Failed to create window' }); return }
       const windowId = newWindow.id
 
-      // 移除新窗口自带的空白标签页
+      // Remove the blank tab created with the new window
       const defaultTabs = await chrome.tabs.query({ windowId })
       const defaultTabIds = defaultTabs.map((t) => t.id!).filter(Boolean)
 
-      // 按分组逐一打开
+      // Open tabs group by group
       const groupTitleToId = new Map<string, number>()
       let firstTab = true
       for (const tab of snapshot.tabs) {
@@ -683,7 +684,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
       }
 
-      // 关闭新窗口自带的空白标签页
+      // Close the blank tab created with the new window
       if (defaultTabIds.length > 0) {
         try { await chrome.tabs.remove(defaultTabIds) } catch { /* may already be gone */ }
       }

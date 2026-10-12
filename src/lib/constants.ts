@@ -1,3 +1,4 @@
+import { LEGACY_AI_GROUPING_PROMPT } from './legacy-localization'
 import type { AiGroupingProvider, AiGroupingSettings, AutoGroupRule, ChromeGroupColor, Preferences } from './types'
 
 export const STORAGE_KEYS = {
@@ -32,25 +33,25 @@ export const DEFAULT_AI_GROUPING_PROMPT_EN = [
   'Use concise group names that would make sense in a Chrome tab group.',
 ].join('\n')
 
-export const DEFAULT_AI_GROUPING_PROMPT_ZH = [
-  '按用户意图对标签页进行分组，而不仅仅按域名。',
-  '用{{language}}返回分组名称和说明。',
-  '当多个标签页服务于同一个任务或项目时，即使来自不同工具或域名也应归为一组。',
-  '对于开发工作，将本地/开发页面、GitHub Issue 或 PR、部署仪表盘、日志、监控、API 文档、产品需求、设计稿和相关聊天视为同一工作流（当它们明显关联同一功能、Bug、发布或产品时）。',
-  '优先使用基于项目、产品、功能、工作流或意图的实用分组名；其次使用类别名如 Code、Research、Design、AI、Docs、Social、Shopping、Travel 或 Finance。',
-  '独立的页面保持未分组，除非它明显属于另一个标签页的上下文。',
-  '使用简洁的分组名，使其在 Chrome 标签分组中一目了然。',
+export const DEFAULT_AI_GROUPING_PROMPT_JA = [
+  'ドメインだけでなく、ユーザーの目的に沿ってタブをグループ化してください。',
+  'グループ名と説明は {{language}} で返してください。',
+  '同じ作業やプロジェクトに関連するタブは、ツールやドメインが異なっていても同じグループにまとめてください。',
+  '開発作業では、同じ機能・不具合・リリース・製品に関係するローカル開発ページ、GitHub の Issue や PR、デプロイ管理画面、ログ、監視、API ドキュメント、要件、デザイン、チャットを一連の作業として扱ってください。',
+  'プロジェクト・製品・機能・作業・目的が明らかな場合は、それに基づく実用的なグループ名を優先してください。それ以外は、開発、調査、デザイン、AI、文書、交流、買い物、旅行、金融などの分類名を使ってください。',
+  'ほかのタブと明確に関連しない単独のページは、未分類のままにしてください。',
+  'Chrome のタブグループで分かりやすい、短いグループ名を使ってください。',
 ].join('\n')
 
 export const DEFAULT_AI_GROUPING_PROMPT = DEFAULT_AI_GROUPING_PROMPT_EN
 
-export function getDefaultAiGroupingPrompt(lang: 'zh' | 'en'): string {
-  return lang === 'zh' ? DEFAULT_AI_GROUPING_PROMPT_ZH : DEFAULT_AI_GROUPING_PROMPT_EN
+export function getDefaultAiGroupingPrompt(lang: 'ja' | 'en'): string {
+  return lang === 'ja' ? DEFAULT_AI_GROUPING_PROMPT_JA : DEFAULT_AI_GROUPING_PROMPT_EN
 }
 
 export function isDefaultAiGroupingPrompt(prompt: string): boolean {
   const trimmed = prompt.trim()
-  return trimmed === DEFAULT_AI_GROUPING_PROMPT_EN || trimmed === DEFAULT_AI_GROUPING_PROMPT_ZH
+  return trimmed === DEFAULT_AI_GROUPING_PROMPT_EN || trimmed === DEFAULT_AI_GROUPING_PROMPT_JA || trimmed === LEGACY_AI_GROUPING_PROMPT
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -125,7 +126,7 @@ const defaultTimestamp = 1_775_772_000_000
 export const DEFAULT_RULES: AutoGroupRule[] = [
   {
     id: 'chrome-management-default',
-    name: 'Chrome 与扩展页面',
+    name: 'Chrome と拡張のページ',
     enabled: true,
     target: 'url',
     mode: 'regex',
@@ -138,7 +139,7 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
   },
   {
     id: 'github-default',
-    name: 'GitHub 工作流',
+    name: 'GitHub の作業',
     enabled: true,
     target: 'url',
     mode: 'contains',
@@ -151,11 +152,11 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
   },
   {
     id: 'docs-default',
-    name: '文档与知识库',
+    name: 'ドキュメントとナレッジ',
     enabled: true,
     target: 'title',
     mode: 'regex',
-    pattern: '(docs|documentation|文档|指南|guide|manual|reference)',
+    pattern: '(docs|documentation|ドキュメント|資料|ガイド|マニュアル|リファレンス|guide|manual|reference)',
     groupTitle: 'Docs',
     color: 'cyan',
     scope: 'currentWindow',
@@ -164,7 +165,7 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
   },
   {
     id: 'ai-default',
-    name: 'AI 助手',
+    name: 'AI アシスタント',
     enabled: true,
     target: 'url',
     mode: 'regex',
@@ -177,7 +178,7 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
   },
   {
     id: 'design-default',
-    name: '设计工具',
+    name: 'デザインツール',
     enabled: true,
     target: 'url',
     mode: 'regex',
@@ -190,7 +191,7 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
   },
   {
     id: 'notes-default',
-    name: '笔记与知识管理',
+    name: 'ノートとナレッジ管理',
     enabled: true,
     target: 'url',
     mode: 'regex',
@@ -203,7 +204,7 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
   },
   {
     id: 'mail-default',
-    name: '邮箱与日程',
+    name: 'メールとカレンダー',
     enabled: true,
     target: 'url',
     mode: 'regex',
@@ -216,7 +217,7 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
   },
   {
     id: 'video-default',
-    name: '视频与流媒体',
+    name: '動画と配信',
     enabled: true,
     target: 'url',
     mode: 'regex',
@@ -243,7 +244,7 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
   },
   {
     id: 'assets-default',
-    name: '图片与静态资源',
+    name: '画像と静的リソース',
     enabled: true,
     target: 'url',
     mode: 'regex',
@@ -256,7 +257,7 @@ export const DEFAULT_RULES: AutoGroupRule[] = [
   },
   {
     id: 'local-dev-default',
-    name: '本地开发服务',
+    name: 'ローカル開発環境',
     enabled: true,
     target: 'url',
     mode: 'regex',
