@@ -1,5 +1,16 @@
 import type { AutoGroupRule, GroupSnapshot, RuleCondition, RuleScope, TabSnapshot, WindowSnapshot } from './types'
 import { DEFAULT_GROUP_MIN_TABS, DEFAULT_RULE_IDS, GROUP_COLORS } from './constants'
+import { isWindowAutoGroupingEnabled } from './storage'
+
+export type GroupingOptions = {
+  automatic?: boolean
+  windowIds?: number[]
+}
+
+async function canProcessWindow(windowId: number, options: GroupingOptions) {
+  if (options.windowIds && !options.windowIds.includes(windowId)) return false
+  return !options.automatic || await isWindowAutoGroupingEnabled(windowId)
+}
 
 export const UNGROUPED_ID = typeof chrome !== 'undefined' && chrome.tabGroups ? chrome.tabGroups.TAB_GROUP_ID_NONE : -1
 
@@ -159,12 +170,17 @@ function getRuleEligibility(rules: AutoGroupRule[], tabs: chrome.tabs.Tab[], def
   return eligibility
 }
 
-export async function applyRuleToTab(rule: AutoGroupRule, tab: chrome.tabs.Tab): Promise<ApplyRuleResult> {
+export async function applyRuleToTab(rule: AutoGroupRule, tab: chrome.tabs.Tab, options: GroupingOptions = {}): Promise<ApplyRuleResult> {
   if (!tab.id) return 'no-match'
   if (!matchRule(rule, tab)) return 'no-match'
 
   const groupWindowId = tab.windowId
   const existing = await findExistingGroup(groupWindowId, rule.groupTitle)
+  if (options.automatic) {
+    const current = await chrome.tabs.get(tab.id).catch(() => undefined)
+    if (!current || current.windowId !== groupWindowId || !matchRule(rule, current)) return 'matched-unchanged'
+  }
+  if (!await canProcessWindow(groupWindowId, options)) return 'matched-unchanged'
   const alreadyInTargetGroup = typeof existing?.id === 'number' && tab.groupId === existing.id
   const groupId = alreadyInTargetGroup ? existing.id : await chrome.tabs.group({ tabIds: [tab.id], groupId: existing?.id })
   const needsGroupUpdate = !existing || existing.color !== rule.color || existing.collapsed
@@ -186,10 +202,11 @@ export async function reconcileTabWithRules(
   tab: chrome.tabs.Tab,
   eligibility: RuleEligibility = new Map(),
   defaultMinimumTabs = DEFAULT_GROUP_MIN_TABS,
+  options: GroupingOptions = {},
 ): Promise<'grouped' | 'ungrouped' | 'unchanged'> {
   for (const rule of rules.filter((item) => item.enabled)) {
     if (!isRuleEligible(rule, tab, eligibility, defaultMinimumTabs)) continue
-    const result = await applyRuleToTab(rule, tab)
+    const result = await applyRuleToTab(rule, tab, options)
     if (result === 'changed') return 'grouped'
     if (result === 'matched-unchanged') return 'unchanged'
   }
@@ -199,6 +216,11 @@ export async function reconcileTabWithRules(
   const managedGroupTitles = getEligibleManagedGroupTitles(rules, tab, eligibility, defaultMinimumTabs)
   const group = await chrome.tabGroups.get(tab.groupId).catch(() => undefined)
   if (!group?.title || !managedGroupTitles.has(group.title)) return 'unchanged'
+  if (options.automatic) {
+    const current = await chrome.tabs.get(tab.id).catch(() => undefined)
+    if (!current || current.windowId !== tab.windowId || current.groupId !== tab.groupId) return 'unchanged'
+  }
+  if (!await canProcessWindow(tab.windowId, options)) return 'unchanged'
 
   await chrome.tabs.ungroup(tab.id)
   return 'ungrouped'
@@ -209,18 +231,21 @@ export async function applyRulesToTabs(
   tabs: chrome.tabs.Tab[],
   domainFallbackGrouping = true,
   groupMinTabs = DEFAULT_GROUP_MIN_TABS,
+  options: GroupingOptions = {},
 ): Promise<number> {
   const normalizedGroupMinTabs = normalizeGroupMinTabs(groupMinTabs)
-  const latestTabs = await getLatestTabsById(tabs)
+  const latestTabs = await getLatestTabsById(tabs, options)
   const ruleEligibility = getRuleEligibility(rules, latestTabs, normalizedGroupMinTabs)
   let changed = 0
   for (const tab of latestTabs) {
-    const result = await reconcileTabWithRules(rules, tab, ruleEligibility, normalizedGroupMinTabs)
+    const currentTab = options.automatic ? await chrome.tabs.get(tab.id!).catch(() => undefined) : tab
+    if (!currentTab || currentTab.windowId !== tab.windowId || !await canProcessWindow(currentTab.windowId, options)) continue
+    const result = await reconcileTabWithRules(rules, currentTab, ruleEligibility, normalizedGroupMinTabs, options)
     if (result !== 'unchanged') changed += 1
   }
-  changed += await ungroupFallbackGroupsBelowThreshold(rules, latestTabs, normalizedGroupMinTabs, ruleEligibility)
+  changed += await ungroupFallbackGroupsBelowThreshold(rules, latestTabs, normalizedGroupMinTabs, ruleEligibility, options)
   if (!domainFallbackGrouping) return changed
-  return changed + await groupUngroupedTabsByDomain(latestTabs, normalizedGroupMinTabs)
+  return changed + await groupUngroupedTabsByDomain(latestTabs, normalizedGroupMinTabs, options)
 }
 
 export async function getTargetWindowId(): Promise<number | undefined> {
@@ -249,12 +274,14 @@ export async function queryTabsByScope(scope: RuleScope): Promise<chrome.tabs.Ta
   return queryTargetWindowTabs()
 }
 
-async function collapseGroupsInWindow(windowId: number): Promise<number> {
+async function collapseGroupsInWindow(windowId: number, options: GroupingOptions = {}): Promise<number> {
+  if (!await canProcessWindow(windowId, options)) return 0
   const groups = await chrome.tabGroups.query({ windowId })
   let collapsed = 0
 
   for (const group of groups) {
     if (group.collapsed) continue
+    if (!await canProcessWindow(windowId, options)) break
     try {
       await chrome.tabGroups.update(group.id, { collapsed: true })
       collapsed += 1
@@ -266,11 +293,16 @@ async function collapseGroupsInWindow(windowId: number): Promise<number> {
   return collapsed
 }
 
+export async function collapseGroupsForTabs(tabs: chrome.tabs.Tab[], options: GroupingOptions = {}): Promise<number> {
+  const counts = await Promise.all(getWindowIdsFromTabs(tabs).map((windowId) => collapseGroupsInWindow(windowId, options)))
+  return counts.reduce((total, count) => total + count, 0)
+}
+
 export async function collapseGroupsByScope(scope: RuleScope): Promise<number> {
   if (scope === 'allWindows') {
     const windows = await chrome.windows.getAll({ windowTypes: ['normal'] })
     const windowIds = windows.flatMap((window) => typeof window.id === 'number' ? [window.id] : [])
-    const collapsedCounts = await Promise.all(windowIds.map(collapseGroupsInWindow))
+    const collapsedCounts = await Promise.all(windowIds.map((id) => collapseGroupsInWindow(id)))
     return collapsedCounts.reduce((total, count) => total + count, 0)
   }
 
@@ -279,7 +311,8 @@ export async function collapseGroupsByScope(scope: RuleScope): Promise<number> {
   return collapseGroupsInWindow(windowId)
 }
 
-async function consolidateDuplicateGroupsInWindow(windowId: number): Promise<number> {
+async function consolidateDuplicateGroupsInWindow(windowId: number, options: GroupingOptions = {}): Promise<number> {
+  if (!await canProcessWindow(windowId, options)) return 0
   const groups = await chrome.tabGroups.query({ windowId })
   const groupsByTitle = new Map<string, chrome.tabGroups.TabGroup[]>()
 
@@ -297,6 +330,7 @@ async function consolidateDuplicateGroupsInWindow(windowId: number): Promise<num
       const tabs = await chrome.tabs.query({ windowId, groupId: duplicate.id })
       const tabIds = tabs.flatMap((tab) => typeof tab.id === 'number' ? [tab.id] : [])
       if (tabIds.length === 0) continue
+      if (!await canProcessWindow(windowId, options)) return movedTabs
       await chrome.tabs.group({ tabIds: tabIds as [number, ...number[]], groupId: keeper.id })
       movedTabs += tabIds.length
     }
@@ -321,18 +355,18 @@ export async function consolidateDuplicateGroupsByScope(scope: RuleScope): Promi
   return consolidateDuplicateGroupsInWindow(windowId)
 }
 
-export async function consolidateDuplicateGroupsForTabs(tabs: chrome.tabs.Tab[], includeAllOpenWindows = false): Promise<number> {
+export async function consolidateDuplicateGroupsForTabs(tabs: chrome.tabs.Tab[], includeAllOpenWindows = false, options: GroupingOptions = {}): Promise<number> {
   const tabWindowIds = getWindowIdsFromTabs(tabs)
-  if (!includeAllOpenWindows) return consolidateDuplicateGroupsByWindowIds(tabWindowIds)
+  if (!includeAllOpenWindows) return consolidateDuplicateGroupsByWindowIds(tabWindowIds, options)
 
   const windows = await chrome.windows.getAll({ windowTypes: ['normal'] })
   const windowIds = windows.flatMap((window) => typeof window.id === 'number' ? [window.id] : [])
-  return consolidateDuplicateGroupsByWindowIds([...tabWindowIds, ...windowIds])
+  return consolidateDuplicateGroupsByWindowIds([...tabWindowIds, ...windowIds], options)
 }
 
-async function consolidateDuplicateGroupsByWindowIds(windowIds: number[]): Promise<number> {
+async function consolidateDuplicateGroupsByWindowIds(windowIds: number[], options: GroupingOptions = {}): Promise<number> {
   const uniqueWindowIds = [...new Set(windowIds)]
-  const movedCounts = await Promise.all(uniqueWindowIds.map(consolidateDuplicateGroupsInWindow))
+  const movedCounts = await Promise.all(uniqueWindowIds.map((windowId) => consolidateDuplicateGroupsInWindow(windowId, options)))
   return movedCounts.reduce((total, count) => total + count, 0)
 }
 
@@ -345,8 +379,8 @@ function compareRecentUngroupedTabs(a: TabSnapshot, b: TabSnapshot) {
   return b.lastAccessed - a.lastAccessed || b.index - a.index || a.id - b.id
 }
 
-export async function getCurrentWindowSnapshot(): Promise<WindowSnapshot> {
-  const windowId = await getTargetWindowId()
+export async function getCurrentWindowSnapshot(windowId?: number): Promise<WindowSnapshot> {
+  windowId ??= await getTargetWindowId()
   const [tabs, groups] = await Promise.all([
     typeof windowId === 'number' ? chrome.tabs.query({ windowId }) : chrome.tabs.query({ currentWindow: true }),
     typeof windowId === 'number' ? chrome.tabGroups.query({ windowId }) : chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
@@ -465,10 +499,12 @@ function getDomainBucketKey(tab: chrome.tabs.Tab) {
   return domain && typeof tab.windowId === 'number' ? `${tab.windowId}\n${domain}` : ''
 }
 
-async function getLatestTabsById(tabs: chrome.tabs.Tab[]) {
+async function getLatestTabsById(tabs: chrome.tabs.Tab[], options: GroupingOptions = {}) {
   const tabIds = tabs.flatMap((tab) => typeof tab.id === 'number' ? [tab.id] : [])
   const latestTabs = await Promise.all(tabIds.map((id) => chrome.tabs.get(id).catch(() => undefined)))
-  return latestTabs.filter((tab): tab is chrome.tabs.Tab => Boolean(tab))
+  const candidates = latestTabs.filter((tab): tab is chrome.tabs.Tab => Boolean(tab))
+  const allowed = await Promise.all(candidates.map((tab) => canProcessWindow(tab.windowId, options)))
+  return candidates.filter((_, index) => allowed[index])
 }
 
 async function findExistingDomainGroup(windowId: number, title: string, domain: string) {
@@ -492,11 +528,14 @@ async function getDomainGroupTitle(windowId: number, inferredTitle: string, doma
   return titleExistsForAnotherDomain ? `${inferredTitle} · ${domain}` : inferredTitle
 }
 
-async function groupTabsIntoDomainGroup(windowId: number, tabIds: number[], title: string, color: chrome.tabGroups.TabGroup['color'], domain: string) {
-  if (tabIds.length === 0) return
+async function groupTabsIntoDomainGroup(windowId: number, tabIds: number[], title: string, color: chrome.tabGroups.TabGroup['color'], domain: string, options: GroupingOptions) {
   const existing = await findExistingDomainGroup(windowId, title, domain)
-  const groupId = await chrome.tabs.group({ tabIds: tabIds as [number, ...number[]], groupId: existing?.id })
+  const latest = await getLatestTabsById(tabIds.map((id) => ({ id }) as chrome.tabs.Tab), options)
+  const liveTabIds = latest.filter((tab) => tab.windowId === windowId && tab.groupId === UNGROUPED_ID).map((tab) => tab.id!)
+  if (liveTabIds.length === 0 || !await canProcessWindow(windowId, options)) return 0
+  const groupId = await chrome.tabs.group({ tabIds: liveTabIds as [number, ...number[]], groupId: existing?.id })
   await chrome.tabGroups.update(groupId, { title, color, collapsed: false })
+  return liveTabIds.length
 }
 
 function normalizeGroupMinTabs(value: number) {
@@ -528,6 +567,7 @@ export async function ungroupFallbackGroupsBelowThreshold(
   tabs: chrome.tabs.Tab[],
   minimumTabs: number,
   ruleEligibility: RuleEligibility = new Map(),
+  options: GroupingOptions = {},
 ): Promise<number> {
   const normalizedMinimumTabs = normalizeGroupMinTabs(minimumTabs)
   const alwaysManagedGroupTitles = new Set(
@@ -538,9 +578,11 @@ export async function ungroupFallbackGroupsBelowThreshold(
   let changed = 0
 
   for (const windowId of getWindowIdsFromTabs(tabs)) {
+    if (!await canProcessWindow(windowId, options)) continue
     const ineligibleThresholdGroupTitles = getIneligibleThresholdGroupTitles(rules, windowId, ruleEligibility, normalizedMinimumTabs)
     const groups = await chrome.tabGroups.query({ windowId })
     for (const group of groups) {
+      if (!await canProcessWindow(windowId, options)) break
       if (group.title && ineligibleThresholdGroupTitles.has(group.title)) {
         const groupTabs = await chrome.tabs.query({ windowId, groupId: group.id })
         const tabIds = groupTabs.flatMap((tab) => typeof tab.id === 'number' ? [tab.id] : [])
@@ -561,8 +603,8 @@ export async function ungroupFallbackGroupsBelowThreshold(
   return changed
 }
 
-async function groupUngroupedTabsByDomain(sourceTabs: chrome.tabs.Tab[], minimumTabs: number): Promise<number> {
-  const latestTabs = await getLatestTabsById(sourceTabs)
+async function groupUngroupedTabsByDomain(sourceTabs: chrome.tabs.Tab[], minimumTabs: number, options: GroupingOptions): Promise<number> {
+  const latestTabs = await getLatestTabsById(sourceTabs, options)
   const domainBuckets = new Map<string, chrome.tabs.Tab[]>()
 
   for (const tab of getEligibleDomainTabs(latestTabs)) {
@@ -592,8 +634,7 @@ async function groupUngroupedTabsByDomain(sourceTabs: chrome.tabs.Tab[], minimum
       ? await getDomainGroupTitle(bucket.windowId, bucket.inferredTitle, bucket.domain)
       : `${bucket.inferredTitle} · ${bucket.domain}`
     const tabIds = bucket.tabs.flatMap((tab) => typeof tab.id === 'number' ? [tab.id] : [])
-    await groupTabsIntoDomainGroup(bucket.windowId, tabIds, title, getDomainGroupColor(index), bucket.domain)
-    changed += tabIds.length
+    changed += await groupTabsIntoDomainGroup(bucket.windowId, tabIds, title, getDomainGroupColor(index), bucket.domain, options)
   }
 
   return changed

@@ -232,12 +232,21 @@ export function AnchorSelect<T extends string>({
   )
 }
 
-export function Switch({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+export function Switch({ checked, onChange, disabled = false, ariaLabel, describedBy }: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  disabled?: boolean
+  ariaLabel?: string
+  describedBy?: string
+}) {
   return (
     <motion.button
       type="button"
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="relative h-6 w-11 shrink-0 rounded-full outline-none focus:ring-4 focus:ring-violet-500/15"
+      className="relative h-6 w-11 shrink-0 rounded-full outline-none focus:ring-4 focus:ring-violet-500/15 disabled:cursor-wait disabled:opacity-50"
+      aria-label={ariaLabel}
+      aria-describedby={describedBy}
       aria-pressed={checked}
       animate={{ backgroundColor: checked ? '#8b5cf6' : '#3f3f46' }}
       whileTap={{ scale: 0.96 }}

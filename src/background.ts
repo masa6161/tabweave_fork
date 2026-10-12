@@ -1,5 +1,5 @@
-import { getAiGroupingSettings, getPreferences, getRules, getSnapshots, getSnoozedTabs, saveSnoozedTabs, saveSnapshots } from './lib/storage'
-import { applyRulesToTabs, collapseGroupsByScope, consolidateDuplicateGroupsForTabs, queryTabsByScope } from './lib/grouping'
+import { clearWindowAutoGroupingState, getAiGroupingSettings, getPreferences, getRules, getSnapshots, getSnoozedTabs, isWindowAutoGroupingEnabled, saveSnoozedTabs, saveSnapshots, setWindowAutoGroupingEnabled } from './lib/storage'
+import { applyRulesToTabs, collapseGroupsByScope, collapseGroupsForTabs, consolidateDuplicateGroupsForTabs, queryTabsByScope } from './lib/grouping'
 import { applyAiGroupingPlan, generateAiGroupingPlan } from './lib/ai/grouping'
 import { deduplicateByScope } from './lib/deduplication'
 import { hibernateByScope } from './lib/hibernation'
@@ -233,9 +233,38 @@ async function toggleCommandSearchInActiveTab() {
   }
 }
 
-async function collapseAfterAutomaticGrouping(preferences: Preferences) {
-  if (!preferences.autoCollapseGroups) return
-  await collapseGroupsByScope(preferences.organizeScope)
+// A pause acknowledgement waits for earlier automatic work to finish. Later
+// events always read the saved state, including after a service worker restart.
+let windowAutomationQueue: Promise<unknown> = Promise.resolve()
+
+function queueWindowAutomation<T>(task: () => Promise<T>): Promise<T> {
+  const result = windowAutomationQueue.then(task)
+  windowAutomationQueue = result.catch(() => undefined)
+  return result
+}
+
+async function organizeAutomatically(windowId: number, preferences: Preferences, onlyThisWindow = false, onCreate = false) {
+  if (!await isWindowAutoGroupingEnabled(windowId)) return
+  const rules = await getRules()
+  const tabs = onlyThisWindow || preferences.organizeScope === 'currentWindow'
+    ? await chrome.tabs.query({ windowId })
+    : await queryTabsByScope('allWindows')
+  const options = { automatic: true, windowIds: [...new Set(tabs.map((tab) => tab.windowId))] }
+  await applyRulesToTabs(rules, tabs, !onCreate && preferences.domainFallbackGrouping, preferences.groupMinTabs, options)
+  await consolidateDuplicateGroupsForTabs(tabs, false, options)
+  if (preferences.autoCollapseGroups) await collapseGroupsForTabs(tabs, options)
+}
+
+async function groupAfterTabEvent(tabId: number, onCreate = false, attached = false) {
+  return queueWindowAutomation(async () => {
+    const tab = await chrome.tabs.get(tabId).catch(() => undefined)
+    if (!tab) return
+    const preferences = await getPreferences()
+    const enabled = attached
+      ? preferences.autoGroupOnCreate || preferences.autoGroupOnUpdate
+      : onCreate ? preferences.autoGroupOnCreate : preferences.autoGroupOnUpdate
+    if (enabled) await organizeAutomatically(tab.windowId, preferences, attached || onCreate, onCreate)
+  })
 }
 
 async function reconcileSnoozeAlarms() {
@@ -286,26 +315,28 @@ chrome.tabs.onCreated.addListener(async (tab) => {
     await deduplicateByScope(preferences.duplicateScope)
   }
   if (preferences.autoGroupOnCreate) {
-    const rules = await getRules()
-    await applyRulesToTabs(rules, [tab], false, preferences.groupMinTabs)
-    await consolidateDuplicateGroupsForTabs([tab])
-    await collapseAfterAutomaticGrouping(preferences)
+    if (typeof tab.id === 'number') await groupAfterTabEvent(tab.id, true)
   }
 })
 
-chrome.tabs.onUpdated.addListener(async (_tabId, changeInfo) => {
-  if (changeInfo.status !== 'complete' && !changeInfo.url) return
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  const navigationChanged = changeInfo.status === 'complete' || typeof changeInfo.url === 'string'
+  if (!navigationChanged && typeof changeInfo.title !== 'string') return
   const preferences = await getPreferences()
-  if (preferences.autoDeduplicateTabs) {
+  if (navigationChanged && preferences.autoDeduplicateTabs) {
     await deduplicateByScope(preferences.duplicateScope)
   }
   if (preferences.autoGroupOnUpdate) {
-    const rules = await getRules()
-    const tabs = await queryTabsByScope(preferences.organizeScope)
-    await applyRulesToTabs(rules, tabs, preferences.domainFallbackGrouping, preferences.groupMinTabs)
-    await consolidateDuplicateGroupsForTabs(tabs)
-    await collapseAfterAutomaticGrouping(preferences)
+    await groupAfterTabEvent(tabId)
   }
+})
+
+chrome.tabs.onAttached.addListener(async (tabId) => {
+  await groupAfterTabEvent(tabId, false, true)
+})
+
+chrome.windows.onRemoved.addListener(async (windowId) => {
+  await queueWindowAutomation(() => clearWindowAutoGroupingState(windowId))
 })
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -344,6 +375,27 @@ chrome.commands.onCommand.addListener((command) => {
 })
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'TABWEAVE_SET_WINDOW_AUTO_GROUPING') {
+    if (!Number.isInteger(message.windowId) || message.windowId < 0 || typeof message.enabled !== 'boolean') {
+      sendResponse({ ok: false, error: 'Invalid window automation setting' })
+      return false
+    }
+    void queueWindowAutomation(async () => {
+      await chrome.windows.get(message.windowId)
+      await setWindowAutoGroupingEnabled(message.windowId, message.enabled)
+      if (message.enabled) {
+        const preferences = await getPreferences()
+        if (preferences.autoGroupOnCreate || preferences.autoGroupOnUpdate) {
+          await organizeAutomatically(message.windowId, preferences, true)
+        }
+      }
+      return { ok: true, enabled: message.enabled }
+    })
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) }))
+    return true
+  }
+
   if (message?.type === 'TABWEAVE_REGROUP') {
     void regroupCurrentWindow()
       .then((result) => sendResponse({ ok: true, ...result }))

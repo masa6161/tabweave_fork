@@ -53,6 +53,34 @@ export async function savePreferences(preferences: Preferences): Promise<void> {
   await chrome.storage.sync.set({ [STORAGE_KEYS.preferences]: preferences })
 }
 
+function getWindowAutoGroupingKey(windowId: number) {
+  return `${STORAGE_KEYS.windowAutoGroupingPaused}.${windowId}`
+}
+
+export async function isWindowAutoGroupingEnabled(windowId: number): Promise<boolean> {
+  const key = getWindowAutoGroupingKey(windowId)
+  const paused = hasChromeStorage()
+    ? (await chrome.storage.session.get(key))[key]
+    : localFallback.get(key)
+  return paused !== true
+}
+
+export async function setWindowAutoGroupingEnabled(windowId: number, enabled: boolean): Promise<void> {
+  const key = getWindowAutoGroupingKey(windowId)
+  // Separate keys keep simultaneous changes to different windows independent.
+  if (!hasChromeStorage()) {
+    if (enabled) localFallback.delete(key)
+    else localFallback.set(key, true)
+    return
+  }
+  if (enabled) await chrome.storage.session.remove(key)
+  else await chrome.storage.session.set({ [key]: true })
+}
+
+export async function clearWindowAutoGroupingState(windowId: number): Promise<void> {
+  await setWindowAutoGroupingEnabled(windowId, true)
+}
+
 function normalizeAiGroupingSettings(settings?: LegacyAiGroupingSettings, lang: 'zh' | 'en' = 'en'): AiGroupingSettings {
   const provider = settings?.provider ?? DEFAULT_AI_GROUPING_SETTINGS.provider
   const apiKeys = { ...(settings?.apiKeys ?? {}) }

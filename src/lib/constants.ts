@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   aiGroupingApiKeyCursor: 'tabweave.aiGroupingApiKeyCursor',
   snoozedTabs: 'tabweave.snoozedTabs',
   snapshots: 'tabweave.snapshots',
+  windowAutoGroupingPaused: 'tabweave.windowAutoGroupingPaused',
 } as const
 
 export const DEFAULT_GROUP_MIN_TABS = 3

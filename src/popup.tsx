@@ -4,13 +4,13 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { AppleIntelligenceGlow } from 'apple-intelligence-glow-react'
 import './index.css'
 import { COLOR_CLASS, STORAGE_KEYS } from './lib/constants'
-import { getAiGroupingSettings, getLastHibernateResult, getPreferences, getRules, saveRules } from './lib/storage'
+import { getAiGroupingSettings, getLastHibernateResult, getPreferences, getRules, isWindowAutoGroupingEnabled, saveRules } from './lib/storage'
 import { applyTheme } from './lib/theme'
 import { GITHUB_ISSUES_URL, getExtensionVersion, openExternalUrl } from './lib/links'
 import { getMessages } from './lib/i18n'
 import { createGroupFromTabs, getCurrentWindowSnapshot } from './lib/grouping'
 import type { AiGroupingPlan, AiGroupingSettings, AutoGroupRule, HibernateResult, LanguageMode, Preferences, RuleCondition, TabSnapshot, WindowSnapshot } from './lib/types'
-import { EmptyState, GhostButton, PrimaryButton, TextInput } from './components/ui'
+import { EmptyState, GhostButton, PrimaryButton, Switch, TextInput } from './components/ui'
 import { isChromeBuiltInAiProvider, prepareChromeBuiltInAi } from './lib/ai/chrome-built-in'
 
 const MESSAGE_AUTO_DISMISS_MS = 5200
@@ -28,6 +28,16 @@ const POPUP_CONTROL_BUTTON_CLASS = 'min-h-[var(--pop-control-button-min)] px-[va
 
 function runtimeAvailable() {
   return typeof chrome !== 'undefined' && Boolean(chrome.tabs && chrome.tabGroups)
+}
+
+async function readPopupWindow() {
+  const window = await chrome.windows.getCurrent()
+  if (typeof window.id !== 'number') throw new Error('Current window is unavailable')
+  const [snapshot, enabled] = await Promise.all([
+    getCurrentWindowSnapshot(window.id),
+    isWindowAutoGroupingEnabled(window.id),
+  ])
+  return { windowId: window.id, snapshot, enabled }
 }
 
 function getTabFallbackLabel(tab: TabSnapshot) {
@@ -102,12 +112,15 @@ export function Popup() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
+  const [windowAutoGrouping, setWindowAutoGrouping] = useState<{ windowId: number; enabled: boolean } | null>(null)
+  const [savingWindowAutoGrouping, setSavingWindowAutoGrouping] = useState(false)
   const [selected, setSelected] = useState<number[]>([])
   const [newGroupTitle, setNewGroupTitle] = useState('')
   const [message, setMessage] = useState('')
   const [messagePaused, setMessagePaused] = useState(false)
   const [aiError, setAiError] = useState('')
   const [languageMode, setLanguageMode] = useState<LanguageMode>('system')
+
   const [preferences, setPreferences] = useState<Preferences | null>(null)
   const [aiSettings, setAiSettings] = useState<AiGroupingSettings | null>(null)
   const [aiPlan, setAiPlan] = useState<AiGroupingPlan | null>(null)
@@ -137,7 +150,9 @@ export function Popup() {
       setLoading(false)
       return
     }
-    commitSnapshot(await getCurrentWindowSnapshot())
+    const next = await readPopupWindow()
+    commitSnapshot(next.snapshot)
+    setWindowAutoGrouping({ windowId: next.windowId, enabled: next.enabled })
     setLoading(false)
   }, [commitSnapshot])
 
@@ -150,13 +165,14 @@ export function Popup() {
       }
       const [preferences, hibernateResult, aiGroupingSettings] = await Promise.all([getPreferences(), getLastHibernateResult(), getAiGroupingSettings()])
       applyTheme(preferences.themeMode)
-      const next = await getCurrentWindowSnapshot()
+      const next = await readPopupWindow()
       if (!cancelled) {
         setLanguageMode(preferences.languageMode)
         setPreferences(preferences)
         setAiSettings(aiGroupingSettings)
         setLastHibernateResult(hibernateResult)
-        commitSnapshot(next)
+        commitSnapshot(next.snapshot)
+        setWindowAutoGrouping({ windowId: next.windowId, enabled: next.enabled })
         setLoading(false)
       }
     })()
@@ -196,11 +212,14 @@ export function Popup() {
       if (areaName === 'local' && changes[STORAGE_KEYS.aiGroupingSettings]) {
         void getAiGroupingSettings().then(setAiSettings)
       }
+      if (areaName === 'session' && Object.keys(changes).some((key) => key.startsWith(`${STORAGE_KEYS.windowAutoGroupingPaused}.`))) {
+        void refresh()
+      }
     }
 
     chrome.storage.onChanged.addListener(handleStorageChanged)
     return () => chrome.storage.onChanged.removeListener(handleStorageChanged)
-  }, [])
+  }, [refresh])
 
   useEffect(() => {
     if (!runtimeAvailable()) return
@@ -269,6 +288,25 @@ export function Popup() {
       await refresh()
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function toggleWindowAutoGrouping(enabled: boolean) {
+    if (!windowAutoGrouping || savingWindowAutoGrouping) return
+    setSavingWindowAutoGrouping(true)
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'TABWEAVE_SET_WINDOW_AUTO_GROUPING',
+        windowId: windowAutoGrouping.windowId,
+        enabled,
+      })
+      if (!response?.ok) throw new Error(response?.error ?? t.failed)
+      await refresh()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error))
+      await refresh()
+    } finally {
+      setSavingWindowAutoGrouping(false)
     }
   }
 
@@ -548,6 +586,28 @@ export function Popup() {
               {t.settings}
             </GhostButton>
           </div>
+
+          {runtimeAvailable() && (
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.04] px-3 py-2 ring-1 ring-white/10 light:!bg-zinc-100/80 light:!ring-zinc-900/10">
+              <div className="min-w-0">
+                <p className="text-xs font-medium">{t.windowAutoGrouping}</p>
+                <p id="window-auto-grouping-description" className="mt-0.5 text-[11px] leading-4 text-zinc-500">
+                  {windowAutoGrouping?.enabled === false
+                    ? t.windowAutoGroupingPaused
+                    : preferences?.autoGroupOnCreate || preferences?.autoGroupOnUpdate
+                      ? t.windowAutoGroupingEnabled
+                      : t.windowAutoGroupingNeedsSettings}
+                </p>
+              </div>
+              <Switch
+                checked={windowAutoGrouping?.enabled ?? true}
+                onChange={(enabled) => { void toggleWindowAutoGrouping(enabled) }}
+                disabled={loading || !windowAutoGrouping || savingWindowAutoGrouping || busy || aiBusy}
+                ariaLabel={t.windowAutoGrouping}
+                describedBy="window-auto-grouping-description"
+              />
+            </div>
+          )}
 
           {controlsReady ? (
             <div className={`grid gap-[var(--pop-control-gap)] ${controlGridClass}`}>

@@ -24,6 +24,8 @@ TabWeave is a Chrome extension for keeping tab groups clean with rule-based auto
 - **Popup workspace** for checking groups, expanding/collapsing groups, closing tabs, and creating manual groups.
 - **Options page** for rule CRUD, drag-to-reorder priority, import/export, preferences, shortcuts, and issue links.
 - **Automatic reconciliation**. If a tab no longer matches the rule that grouped it, TabWeave can move it back to ungrouped.
+- **Window automation control**. Pause automatic grouping for individual windows from the popup or side panel.
+- **Title update detection**. Recheck title rules even when the page URL stays the same.
 - **Dark, light, and system themes**.
 - **Chinese / English UI**, defaulting to the browser language.
 - **Chrome command shortcuts** for opening the popup, organizing the current window, closing duplicate tabs, and opening Command search.
@@ -39,6 +41,14 @@ TabWeave ships two extension pages:
 - **Options**: rule management and preferences.
 
 The background service worker listens for tab creation, tab updates, and extension commands.
+
+## Window automation
+
+The **Auto-group this window** switch defaults to on. Automatic grouping must also be enabled in Settings (on tab creation or page updates). Turning the switch off preserves existing groups and excludes that window from automatic rule grouping, domain grouping, duplicate-group merging, and group collapse, including scans triggered by other windows. Manual organize actions remain available.
+
+Turning it back on immediately organizes that window when automatic grouping is enabled. Tabs moved between windows follow the destination window's setting. Page updates include changes to the title alone.
+
+Window pause settings use `chrome.storage.session`: they survive service worker restarts and are removed when the window closes. Restarting Chrome or reloading, disabling, or updating the extension clears them. See the [Chrome Storage API](https://developer.chrome.com/docs/extensions/reference/api/storage#storage_areas).
 
 ## Default rules
 
@@ -88,6 +98,12 @@ Use **Import** to restore from a JSON file. Importing is a full replacement: Tab
 ```bash
 npm install
 npm run dev
+```
+
+Run regression tests with Node.js 24:
+
+```bash
+npm test
 ```
 
 The Vite dev server is useful for React page development. Chrome extension APIs require loading the built `dist` directory in Chrome.
