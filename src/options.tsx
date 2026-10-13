@@ -26,6 +26,7 @@ import {
 import type { AiGroupingProvider, AiGroupingSettings, AutoGroupRule, LanguageMode, MatchMode, MatchTarget, Preferences, RuleCondition, ShortcutInfo, ThemeMode, UiDensity } from './lib/types'
 import { AnchorSelect, DangerButton, FieldLabel, GhostButton, PrimaryButton, Switch, TextArea, TextInput, Tooltip } from './components/ui'
 import { applyLanguage, getLanguageName, getMessages, resolveLanguage } from './lib/i18n'
+import { localizeErrorMessage } from './lib/localized-errors'
 
 
 const now = () => Date.now()
@@ -505,6 +506,8 @@ function SortableRuleCard({
   selectRuleLabel,
   deleteRuleLabel,
   deleteRuleNamedLabel,
+  fieldLabel,
+  modeLabel,
   onSelect,
   onToggleSelection,
   onDelete,
@@ -518,6 +521,8 @@ function SortableRuleCard({
   selectRuleLabel: string
   deleteRuleLabel: string
   deleteRuleNamedLabel: string
+  fieldLabel: string
+  modeLabel: string
   onSelect: () => void
   onToggleSelection: (checked: boolean) => void
   onDelete: () => void
@@ -568,7 +573,7 @@ function SortableRuleCard({
           </button>
         </div>
         <div className="w-full text-left">
-          <div className="mt-2 truncate pl-12 text-xs text-zinc-500">{rule.target} · {rule.mode} · {rule.pattern}</div>
+          <div className="mt-2 truncate pl-12 text-xs text-zinc-500">{fieldLabel} · {modeLabel} · {rule.pattern}</div>
           <div className="mt-1 pl-12 text-xs text-zinc-600">→ {rule.groupTitle}</div>
         </div>
       </div>
@@ -695,6 +700,12 @@ export function Options() {
     { value: 'regex', label: t.modeRegex, description: t.modeRegexDesc },
   ]
 
+  const colorLabels = {
+    blue: t.colorBlue, purple: t.colorPurple, cyan: t.colorCyan,
+    green: t.colorGreen, yellow: t.colorYellow, orange: t.colorOrange,
+    red: t.colorRed, pink: t.colorPink, grey: t.colorGrey,
+  }
+
 
   const aiProviderOptions: { value: AiGroupingProvider; label: string; description: string }[] = [
     { value: 'openai', label: 'OpenAI', description: 'https://api.openai.com/v1' },
@@ -789,7 +800,7 @@ export function Options() {
       pushSaveToast('saved', t.autoSaveSaved)
       return result
     } catch (error) {
-      const errorMessage = getErrorMessage(error)
+      const errorMessage = localizeErrorMessage(getErrorMessage(error), preferences.languageMode)
       pushSaveToast('error', t.autoSaveFailed, errorMessage ? `${t.autoSaveFailed}: ${errorMessage}` : t.autoSaveFailedDesc)
       throw error
     }
@@ -1305,7 +1316,7 @@ export function Options() {
           <div className="flex items-center justify-between gap-6">
             <div className="text-xs font-semibold uppercase tracking-[0.32em] text-violet-300">TabWeave</div>
             <div className="flex shrink-0 items-center gap-2">
-              <div className="flex rounded-xl bg-zinc-900/70 p-1 ring-1 ring-white/10" aria-label="Theme">
+              <div className="flex rounded-xl bg-zinc-900/70 p-1 ring-1 ring-white/10" aria-label={t.theme}>
                 {THEME_ICON_OPTIONS.map((option) => {
                   const label = option.value === 'dark' ? t.themeDark : option.value === 'light' ? t.themeLight : t.themeSystem
                   return (
@@ -1328,7 +1339,7 @@ export function Options() {
                   )
                 })}
               </div>
-              <div className="flex rounded-xl bg-zinc-900/70 p-1 ring-1 ring-white/10" aria-label="Language">
+              <div className="flex rounded-xl bg-zinc-900/70 p-1 ring-1 ring-white/10" aria-label={t.language}>
                 {LANGUAGE_OPTIONS.map((option) => {
                   const label = option.value === 'system' ? t.languageSystem : option.value === 'ja' ? t.languageJa : option.value === 'zh' ? t.languageZh : t.languageEn
                   return (
@@ -1433,7 +1444,7 @@ export function Options() {
         <aside className="flex flex-col gap-[var(--opt-side-gap)]">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Rules</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{t.rules}</h2>
               <p className="mt-1 text-[11px] text-zinc-600">{t.dragHint}</p>
             </div>
             <PrimaryButton onClick={addRule} className={SMALL_ACTION_CLASS}>{t.add}</PrimaryButton>
@@ -1502,6 +1513,8 @@ export function Options() {
                     selectRuleLabel={t.selectRule.replace('{name}', rule.name)}
                     deleteRuleLabel={t.delete}
                     deleteRuleNamedLabel={t.deleteRuleNamed.replace('{name}', rule.name)}
+                    fieldLabel={targetOptions.find(option => option.value === rule.target)?.label ?? rule.target}
+                    modeLabel={modeOptions.find(option => option.value === rule.mode)?.label ?? rule.mode}
                     onSelect={() => setSelectedId(rule.id)}
                     onToggleSelection={(checked) => toggleRuleSelection(rule.id, checked)}
                     onDelete={() => setConfirmAction({ type: 'delete', rule })}
@@ -1567,7 +1580,7 @@ export function Options() {
                           className={`relative h-8 w-full rounded-xl ${COLOR_CLASS[color]} transition duration-200 hover:scale-[1.03] ${
                             selected ? 'scale-[1.03] ring-4 ring-white/35 shadow-lg shadow-black/20' : 'ring-1 ring-white/10'
                           }`}
-                          title={color}
+                          title={colorLabels[color]}
                         >
                           {selected && (
                             <span className="absolute inset-0 grid place-items-center text-white drop-shadow">
@@ -1968,7 +1981,7 @@ codebase.anyask.dev`} />
                   </button>
                 </p>
               </div>
-              <span className="rounded-full bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-300">Open Source</span>
+              <span className="rounded-full bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-300">{t.openSource}</span>
             </div>
             <div className="mt-[var(--opt-section-gap)] grid grid-cols-2 gap-[var(--opt-action-gap)]">
               <GhostButton onClick={() => openExternalUrl(GITHUB_REPO_URL)} className="px-2 py-2 text-xs">{t.repo}</GhostButton>
@@ -1982,7 +1995,7 @@ codebase.anyask.dev`} />
 
       {status && (
         <div className="fixed bottom-5 right-5 z-40 max-w-sm rounded-2xl bg-zinc-950/95 px-4 py-3 text-sm text-zinc-100 shadow-2xl shadow-black/30 ring-1 ring-white/10 backdrop-blur light:bg-white/96 light:text-zinc-900 light:shadow-[0_18px_45px_rgba(148,163,184,.28)] light:ring-zinc-900/10">
-          {status}
+          {localizeErrorMessage(status, preferences.languageMode)}
         </div>
       )}
 

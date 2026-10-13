@@ -33,19 +33,22 @@ TabWeave is a Chrome extension for keeping tab groups clean with rule-based auto
 - **Command search** for jumping to open tabs, tab groups, history entries, and built-in cleanup commands.
 - **Tab snooze**: schedule tabs or groups to close now and reopen at a specified time, with optional daily recurrence.
 - **Window snapshots**: save and restore all tabs and groups of a window in one click.
+- **AI grouping**: review suggestions before applying them, with optional saving as exact URL rules.
+- **New Tab dashboard**: review groups, ungrouped tabs, snoozed tabs, and snapshots. Search uses Chrome's default search provider.
 
 ## Screens and entry points
 
-TabWeave ships two extension pages:
+TabWeave provides these entry points:
 
-- **Popup**: quick workspace for the current window.
+- **Side Panel / Popup**: workspace for the current window. The Side Panel is enabled by default; turn off "Open as Side Panel" to use the Popup.
 - **Options**: rule management and preferences.
+- **New Tab**: dashboard, search, snoozed tabs, and snapshots.
 
 The background service worker listens for tab creation, tab updates, and extension commands.
 
 ## Window automation
 
-The **Auto-group this window** switch defaults to on. Automatic grouping must also be enabled in Settings (on tab creation or page updates). Turning the switch off preserves existing groups and excludes that window from automatic rule grouping, domain grouping, duplicate-group merging, and group collapse, including scans triggered by other windows. Manual organize actions remain available.
+The **Auto-group this window** switch defaults to on. Automatic grouping must also be enabled in Settings (on tab creation or page updates); both Settings switches default to off. Turning the window switch off preserves existing groups and excludes that window from automatic rule grouping, domain grouping, duplicate-group merging, and group collapse, including scans triggered by other windows. Manual organize actions remain available.
 
 Turning it back on immediately organizes that window when automatic grouping is enabled. Tabs moved between windows follow the destination window's setting. Page updates include changes to the title alone.
 
@@ -96,25 +99,27 @@ Use **Import** to restore from a JSON file. Importing is a full replacement: Tab
 
 ## Development
 
+Use Node.js 24 and pnpm:
+
 ```bash
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 Run regression tests with Node.js 24:
 
 ```bash
-npm test
+pnpm test
 ```
 
-With the dev server running, open `/tests/popup-preview.html` for a popup preview with simulated Chrome APIs. Add `?theme=light` for the light theme. This preview does not operate on your browser's actual tabs.
+With the dev server running, open `/tests/popup-preview.html` for a popup preview with simulated Chrome APIs. Add `?theme=light` for the light theme or `?lang=ja` for Japanese. This preview does not operate on your browser's actual tabs.
 
 The Vite dev server is useful for React page development. Chrome extension APIs require loading the built `dist` directory in Chrome.
 
 ## Build
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 Then load the extension:
@@ -133,6 +138,7 @@ Declared shortcuts:
 | Open TabWeave | Command + B | Ctrl + B |
 | Organize tabs | Option + Shift + G | Ctrl + Shift + G |
 | Deduplicate tabs | Option + Shift + D | Ctrl + Shift + X |
+| Open Command search | Command + Shift + K | Ctrl + Shift + K |
 
 Chrome may leave a shortcut unset if it conflicts with another command. You can change shortcuts at:
 

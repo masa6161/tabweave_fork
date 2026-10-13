@@ -10,6 +10,7 @@ import { getAiGroupingSettings, getPreferences, getRules } from './lib/storage'
 import { applyTheme } from './lib/theme'
 import { openExternalUrl } from './lib/links'
 import { applyLanguage, getMessages } from './lib/i18n'
+import { localizeErrorMessage } from './lib/localized-errors'
 import {
   applyRulesToTabs,
   collapseGroupsByScope,
@@ -699,7 +700,7 @@ function SnoozedItemRow({ item, onWakeUp, onDelete, t, showActions = true }: {
               type="button"
               onClick={() => onDelete(item.id)}
               className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-zinc-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-300 group-hover/row:opacity-100"
-              aria-label="Remove"
+              aria-label={t.delete}
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -804,7 +805,7 @@ export function SnoozedCard({
                     type="button"
                     onClick={() => onDelete(representative.id)}
                     className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-zinc-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-300 group-hover/row:opacity-100"
-                    aria-label="Remove"
+                    aria-label={t.delete}
                   >
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -2184,7 +2185,7 @@ export function NewTab() {
             </button>
           </div>
           <div className="font-medium">
-            {message || statusText}
+            {localizeErrorMessage(message || statusText, preferences?.languageMode ?? 'system')}
           </div>
         </section>
 
@@ -2516,7 +2517,7 @@ export function NewTab() {
                 type="button"
                 onClick={() => setSnapshotToast(null)}
                 className="ml-1 shrink-0 rounded-full p-1 text-zinc-500 transition hover:bg-white/10 hover:text-zinc-300"
-                aria-label="dismiss"
+                aria-label={t.close}
               >
                 <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>

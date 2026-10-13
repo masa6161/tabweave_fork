@@ -12,7 +12,8 @@
       const fixture = createChromeMock({
         tabs: [makeTab(1, 10, 'Research paper'), makeTab(2, 10, 'Inbox'), makeTab(3, 20, 'Research project')],
         preferences: {
-          languageMode: 'en',
+          languageMode: ['ja', 'en', 'zh'].includes(new URLSearchParams(location.search).get('lang'))
+            ? new URLSearchParams(location.search).get('lang') : 'en',
           themeMode: new URLSearchParams(location.search).get('theme') === 'light' ? 'light' : 'dark',
           uiDensity: 'compact', autoGroupOnUpdate: true, domainFallbackGrouping: false, organizeScope: 'allWindows',
         },

@@ -1,5 +1,7 @@
 # Chrome Web Store Listing Copy
 
+[日本語](./listing-copy.ja.md)
+
 ## Name
 
 TabWeave
@@ -25,7 +27,7 @@ Highlights:
 
 Privacy:
 
-TabWeave is designed to be local-first. Rules and preferences are stored on your device by default. Optional AI features are user-configured, and full URL sharing can be turned off.
+Rules are stored locally by default, with optional Chrome sync. General preferences use Chrome sync storage; AI settings and API keys stay local. AI grouping is optional. When run with a cloud provider, it sends full URLs and accessible page context along with tab metadata. The current implementation does not offer switches to disable URL or page-context sharing. Chrome built-in AI processes grouping locally. See the [privacy policy](../PRIVACY.md).
 
 ## Promotional Notes
 

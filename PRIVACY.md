@@ -1,6 +1,8 @@
 # TabWeave Privacy Policy
 
-Last updated: June 1, 2026
+Last updated: October 13, 2026
+
+[日本語](./PRIVACY.ja.md)
 
 TabWeave is a Chrome extension for organizing browser tabs into useful tab groups. This policy explains what information TabWeave handles, how it is used, and when it may be shared.
 
@@ -32,8 +34,10 @@ Specifically, TabWeave uses tab metadata and user rules to:
 
 TabWeave stores settings in Chrome extension storage:
 
-- Rules and general preferences may be stored in `chrome.storage.sync` or `chrome.storage.local`, depending on the user's sync setting.
+- Rules are stored in `chrome.storage.sync` or `chrome.storage.local`, depending on the rule sync setting.
+- General preferences are stored in `chrome.storage.sync`.
 - AI grouping settings and API keys are stored in `chrome.storage.local`.
+- Per-window automation settings are stored in `chrome.storage.session` and cleared when Chrome restarts or the extension reloads.
 
 Chrome may sync data stored in `chrome.storage.sync` through the user's Google account if Chrome sync is enabled. TabWeave does not operate its own account system or backend service.
 
@@ -41,7 +45,7 @@ Chrome may sync data stored in `chrome.storage.sync` through the user's Google a
 
 TabWeave does not sell user data and does not share user data with the developer's own server.
 
-When the optional AI grouping feature is enabled and the user runs it with a cloud provider, TabWeave sends selected tab metadata to the AI provider configured by the user. Supported cloud providers include OpenAI, OpenRouter, Google Gemini, or a user-configured OpenAI-compatible endpoint. Depending on the user's settings, this request may include tab titles, domains, URLs, group names, and optional page context. The user's API key is used only to make requests to the selected provider from the extension.
+When the optional AI grouping feature is enabled and the user runs it with a cloud provider, TabWeave sends selected tab metadata to the AI provider configured by the user. Supported cloud providers include OpenAI, OpenRouter, Google Gemini, or a user-configured OpenAI-compatible endpoint. This request includes tab titles, domains, full URLs, and group names, plus page context when accessible. Full page body text is not sent. The current implementation does not offer switches to disable URL or page-context sharing. The user's API key is used only to make requests to the selected provider from the extension.
 
 If the user selects Chrome built-in AI for AI grouping, TabWeave asks Chrome to process the grouping prompt locally with the browser-managed on-device model when it is available. In that mode, TabWeave does not send the AI grouping prompt to a TabWeave server or to a user-configured cloud AI provider.
 
@@ -74,6 +78,4 @@ Requests to AI providers are sent over HTTPS when those services use HTTPS endpo
 
 ## Contact
 
-For privacy questions or requests, please contact the developer through the TabWeave GitHub repository:
-
-https://github.com/zxpzdtom/tabweave
+For privacy questions about this fork, use the [fork repository](https://github.com/masa6161/tabweave_fork). For upstream TabWeave, use the [upstream repository](https://github.com/zxpzdtom/tabweave).

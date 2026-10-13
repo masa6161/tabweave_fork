@@ -1,5 +1,7 @@
 # Localization maintenance
 
+[日本語](./LOCALIZATION.ja.md)
+
 This fork supports Japanese, English, and Chinese. Browser-language detection selects Japanese or Chinese when applicable, and English otherwise.
 
 Japanese and English are maintained in this fork. Chinese text is owned by [upstream TabWeave](https://github.com/zxpzdtom/tabweave) and must only change through an upstream import. Do not translate new fork features into Chinese, polish existing Chinese copy, or correct Chinese wording locally.

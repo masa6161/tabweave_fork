@@ -8,6 +8,7 @@ import { getAiGroupingSettings, getLastHibernateResult, getPreferences, getRules
 import { applyTheme } from './lib/theme'
 import { GITHUB_ISSUES_URL, getExtensionVersion, openExternalUrl } from './lib/links'
 import { applyLanguage, getMessages } from './lib/i18n'
+import { localizeErrorMessage } from './lib/localized-errors'
 import { createGroupFromTabs, getCurrentWindowSnapshot } from './lib/grouping'
 import type { AiGroupingPlan, AiGroupingSettings, AutoGroupRule, HibernateResult, LanguageMode, Preferences, RuleCondition, TabSnapshot, WindowSnapshot } from './lib/types'
 import { EmptyState, GhostButton, PrimaryButton, Switch, TextInput } from './components/ui'
@@ -671,7 +672,7 @@ export function Popup() {
               onFocus={() => setMessagePaused(true)}
               onBlur={() => setMessagePaused(false)}
             >
-              <div className="py-2">{message}</div>
+              <div className="py-2">{localizeErrorMessage(message, languageMode)}</div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -688,7 +689,7 @@ export function Popup() {
           <div className="space-y-[var(--pop-section-gap)]">
             <div>
               <div className={`sticky top-0 z-20 mb-[var(--pop-sticky-mb)] flex min-h-[var(--pop-sticky-min)] items-center justify-between border-b border-white/10 bg-zinc-950 px-[var(--pop-sticky-x)] py-[var(--pop-sticky-y)] shadow-[0_10px_24px_rgba(9,9,11,.72)] ${LIGHT_STICKY_CLASS}`}>
-                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Groups</h2>
+                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{t.newTabGroups}</h2>
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
@@ -762,7 +763,7 @@ export function Popup() {
 
             <div>
               <div className={`sticky top-0 z-20 mb-[var(--pop-sticky-mb)] flex min-h-[var(--pop-sticky-min)] items-center justify-between border-b border-white/10 bg-zinc-950 px-[var(--pop-sticky-x)] py-[var(--pop-sticky-y)] shadow-[0_10px_24px_rgba(9,9,11,.72)] ${LIGHT_STICKY_CLASS}`}>
-                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Ungrouped</h2>
+                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{t.ungrouped}</h2>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -874,7 +875,7 @@ export function Popup() {
               </div>
 
               <div className="ai-plan-scroll scroll-mask-y-8 min-h-0 flex-1 overflow-auto px-[var(--pop-modal-x)] py-[var(--pop-modal-y)]">
-                <pre className="whitespace-pre-wrap break-words rounded-[var(--pop-card-r)] bg-red-500/[0.08] p-[var(--pop-modal-card-pad)] font-mono text-[11px] leading-5 text-red-200 ring-1 ring-red-400/[0.15]">{aiError}</pre>
+                <pre className="whitespace-pre-wrap break-words rounded-[var(--pop-card-r)] bg-red-500/[0.08] p-[var(--pop-modal-card-pad)] font-mono text-[11px] leading-5 text-red-200 ring-1 ring-red-400/[0.15]">{localizeErrorMessage(aiError, languageMode)}</pre>
               </div>
 
               <div className={`ai-plan-modal-footer flex shrink-0 justify-end border-t border-white/10 bg-zinc-950/90 px-[var(--pop-modal-x)] py-[var(--pop-modal-y)] ${LIGHT_MODAL_CHROME_CLASS}`}>

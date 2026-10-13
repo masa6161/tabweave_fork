@@ -1,0 +1,94 @@
+{
+  "service": "PLaMo翻訳",
+  "url": "https://translate.preferredai.jp/translate/",
+  "date": "2026-10-13",
+  "targetLanguage": "日本語",
+  "style": "おまかせ",
+  "method": "英語7例・中国語（簡体字）7例を各例個別に入力。訳文は無編集で記録。ガイドラインと用語集の設定は変更せず。",
+  "results": [
+    {
+      "id": "readmeTagline",
+      "direction": "en-ja",
+      "source": "Rule-driven Chrome tab grouping for people who keep a lot of tabs open.",
+      "result": "タブを大量に開いたままにする方向けの、ルールベースのChromeタブグループ化。"
+    },
+    {
+      "id": "reconciliation",
+      "direction": "en-ja",
+      "source": "Automatic reconciliation. If a tab no longer matches the rule that grouped it, TabWeave can move it back to ungrouped.",
+      "result": "自動照合。タブがグループ化したルールと一致しなくなった場合、TabWeaveはそのタブをグループ解除の状態に戻すことができます。"
+    },
+    {
+      "id": "patternHint",
+      "direction": "en-ja",
+      "source": "Each condition has its own field, mode, and pattern. Multiple lines inside one pattern mean OR.",
+      "result": "各条件には、それぞれ独自のフィールド、モード、パターンがあります。1つのパターン内に複数の行がある場合は、ORを意味します。"
+    },
+    {
+      "id": "autoHibernateDesc",
+      "direction": "en-ja",
+      "source": "Every few minutes, discard safe background tabs that have been idle long enough.",
+      "result": "数分おきに、十分にアイドル状態が続いている安全なバックグラウンドタブを破棄してください。"
+    },
+    {
+      "id": "confirmImportBody",
+      "direction": "en-ja",
+      "source": "The imported file contains {count} rules. Importing will overwrite all current rules and included preferences. This cannot be undone.",
+      "result": "インポートするファイルには {count} 件のルールが含まれています。インポートすると、現在のすべてのルールと含まれている設定が上書きされます。この操作は元に戻せません。"
+    },
+    {
+      "id": "onUpdateDesc",
+      "direction": "en-ja",
+      "source": "Keeps new tabs in place until Chrome knows their final URL.",
+      "result": "Chromeが最終的なURLを認識するまで、新しいタブは元の位置に保持されます。"
+    },
+    {
+      "id": "aiSendUrlsDesc",
+      "direction": "en-ja",
+      "source": "Off by default. AI grouping can use titles and domains without full URLs.",
+      "result": "デフォルトでオフ。AIグルーピングでは、完全なURLではなくタイトルやドメインを使用できます。"
+    },
+    {
+      "id": "readmeTagline",
+      "direction": "zh-ja",
+      "source": "规则驱动的 Chrome 标签页分组工具，适合常年开着很多标签的人。",
+      "result": "ルール駆動の Chrome タブグループツール。常時多くのタブを開いている方に最適です。"
+    },
+    {
+      "id": "reconciliation",
+      "direction": "zh-ja",
+      "source": "自动纠偏：如果标签页不再匹配当前规则分组，会自动移回未分组。",
+      "result": "自動補正：タブが現在のルールグループに一致しなくなった場合、自動的に未グループ化に戻ります。"
+    },
+    {
+      "id": "patternHint",
+      "direction": "zh-ja",
+      "source": "每条条件都有自己的字段、方式和规则。同一规则内多行表示任意一行命中即可",
+      "result": "各条件にはそれぞれ独自のフィールド、方式、ルールがあります。同一ルール内の複数行は、任意の1行にヒットすれば十分です。"
+    },
+    {
+      "id": "autoHibernateDesc",
+      "direction": "zh-ja",
+      "source": "每隔几分钟扫描一次，安全释放长时间未访问的后台标签页",
+      "result": "数分おきにスキャンし、長期間アクセスされていないバックグラウンドタブを安全に解放する"
+    },
+    {
+      "id": "confirmImportBody",
+      "direction": "zh-ja",
+      "source": "导入文件包含 {count} 条规则。确认后会覆盖当前全部规则，并应用文件内包含的偏好设置。此操作不能撤销",
+      "result": "インポートファイルには {count} 個のルールが含まれています。確認すると現在のすべてのルールを上書きし、ファイル内に含まれるプリファレンスを適用します。この操作は取り消せません"
+    },
+    {
+      "id": "onUpdateDesc",
+      "direction": "zh-ja",
+      "source": "等 Chrome 确认最终 URL 后再整理，避免新标签刚出现就被挪走",
+      "result": "Chrome が最終的な URL を確定してから整理し、新しいタブが出現した直後に移動されるのを避ける"
+    },
+    {
+      "id": "aiSendUrlsDesc",
+      "direction": "zh-ja",
+      "source": "默认关闭。AI 可只用标题和域名进行分组",
+      "result": "デフォルトではオフ。AIはタイトルとドメインのみでグループ化できる"
+    }
+  ]
+}
