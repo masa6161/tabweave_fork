@@ -18,6 +18,8 @@
 
 TabWeave is a Chrome extension for keeping tab groups clean with rule-based automation. It can group tabs by domain, full URL, page title, or regular expressions, then keep existing managed groups in sync as pages finish loading.
 
+This repository is the masa6161 fork. To use a built fork release without Node.js, download its ZIP from [Releases](https://github.com/masa6161/tabweave_fork/releases) and follow the [installation guide](./INSTALL.md). The Chrome Web Store link above installs upstream TabWeave. See [fork release notes](./CHANGELOG.fork.md) for this fork's changes.
+
 ## Highlights
 
 - **Rule-based tab grouping** using domain, URL, title, contains, equals, and regex matching.

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/check-release-notes.mjs && tsc -b && vite build",
+    "package": "pnpm run build && node scripts/package-release.mjs",
     "lint": "eslint .",
     "sync:zh": "node scripts/sync-upstream-chinese.mjs",
     "test": "node --import ./tests/register-typescript.mjs --test tests/*.test.mjs",

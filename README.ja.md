@@ -8,7 +8,7 @@
 
 [English](./README.md) · [upstream の中国語版](./README.zh-CN.md) · [変更履歴](./CHANGELOG.ja.md) · [プライバシーポリシー](./PRIVACY.ja.md)
 
-このリポジトリは [TabWeave](https://github.com/zxpzdtom/tabweave) のフォークです。[Chrome ウェブストアの公開版](https://chromewebstore.google.com/detail/tabweave/pmfoefbiapldlpljfpjienjahdfmefej)は upstream の拡張機能です。このフォークを使う場合は、下記の手順でビルドして読み込んでください。
+このリポジトリは [TabWeave](https://github.com/zxpzdtom/tabweave) のフォークです。[Chrome ウェブストアの公開版](https://chromewebstore.google.com/detail/tabweave/pmfoefbiapldlpljfpjienjahdfmefej)は upstream の拡張機能です。このフォークは [Releases](https://github.com/masa6161/tabweave_fork/releases) のビルド済み ZIP を使えば、Node.js の導入やビルドなしで読み込めます。[インストール手順](./INSTALL.ja.md)と[フォーク版の変更履歴](./CHANGELOG.fork.md)を参照してください。ソースからビルドする手順は下記にあります。
 
 ## 主な機能
 

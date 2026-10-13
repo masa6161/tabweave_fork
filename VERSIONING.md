@@ -10,6 +10,8 @@
 
 upstream の履歴は `CHANGELOG.md` に保持し、フォーク独自の履歴は `CHANGELOG.fork.md` に記録します。中国語の追記・修正は行いません。
 
+リリース対象をコミットし、`vX.Y.Z-fork.N` タグをそのコミットへ付けてから `pnpm run package` を実行します。ZIP と読み込み用のフォルダーは `releases/` に作成されます。作成済みのパッケージは上書きしません。
+
 ## English
 
 Use `X.Y.Z-fork.N` for the displayed fork version and `X.Y.Z.N` for Chrome's numeric update version. `X.Y.Z` identifies the imported upstream version; `N` counts fork updates on that base. The first fork version is `0.8.1-fork.1` / `0.8.1.1`.
@@ -19,3 +21,5 @@ For each fork update, increment `N` and update `package.json`'s `version`, the m
 Options and Popup display `version_name`. Browser previews use the build's manifest when extension APIs are unavailable. The build checks matching versions, Chrome's numeric format, and a corresponding changelog entry.
 
 Keep upstream history in `CHANGELOG.md` and fork history in `CHANGELOG.fork.md`. Do not add or edit Chinese copy.
+
+Commit the release changes, tag that commit as `vX.Y.Z-fork.N`, then run `pnpm run package`. The ZIP and unpacked folder are created in `releases/`. Existing packages are never overwritten.
