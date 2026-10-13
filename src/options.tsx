@@ -12,7 +12,7 @@ import { COLOR_CLASS, DEFAULT_AI_GROUPING_MODELS, DEFAULT_AI_GROUPING_PROMPT, DE
 import { getAiGroupingSettings, getPreferences, getRules, normalizePreferences, parseAiGroupingApiKeys, resetRules, saveAiGroupingSettings, savePreferences, saveRules } from './lib/storage'
 import { applyTheme } from './lib/theme'
 import { formatShortcut } from './lib/shortcuts'
-import { CHROME_WEB_STORE_URL, GITHUB_ISSUES_URL, GITHUB_REPO_URL, getExtensionVersion, openExternalUrl } from './lib/links'
+import { GITHUB_ISSUES_URL, GITHUB_REPO_URL, getExtensionVersion, openExternalUrl } from './lib/links'
 import {
   getRuleConditions,
   getDomain,
@@ -1961,7 +1961,7 @@ codebase.anyask.dev`} />
                   {t.version}{' '}
                   <button
                     type="button"
-                    onClick={() => openExternalUrl(CHROME_WEB_STORE_URL)}
+                    onClick={() => openExternalUrl(GITHUB_REPO_URL)}
                     className="font-medium text-zinc-500 underline decoration-zinc-700/60 underline-offset-4 transition hover:text-violet-300 hover:decoration-violet-400/40"
                   >
                     v{extensionVersion}
