@@ -6,6 +6,7 @@ import { hibernateByScope } from './lib/hibernation'
 import { activateCommandItem, searchCommandItems, type CommandSearchItem } from './lib/command-search'
 import { getMessages, resolveLanguage } from './lib/i18n'
 import type { ChromeGroupColor, Preferences, SessionSnapshot, SnoozeItem } from './lib/types'
+import { reconcileWindowAutoGrouping } from './lib/window-automation'
 
 const HIBERNATE_ALARM_NAME = 'tabweave.hibernate'
 const SNOOZE_ALARM_PREFIX = 'tabweave.snooze.'
@@ -243,6 +244,23 @@ function queueWindowAutomation<T>(task: () => Promise<T>): Promise<T> {
   return result
 }
 
+let windowStateTimer: ReturnType<typeof setTimeout> | undefined
+let windowStateRevision = 0
+function scheduleWindowStateReconciliation() {
+  const revision = ++windowStateRevision
+  clearTimeout(windowStateTimer)
+  windowStateTimer = setTimeout(() => {
+    void queueWindowAutomation(async () => {
+      if (revision !== windowStateRevision) return
+      const restored = await reconcileWindowAutoGrouping(() => revision === windowStateRevision)
+      const preferences = await getPreferences()
+      if (preferences.autoGroupOnCreate || preferences.autoGroupOnUpdate) {
+        for (const windowId of restored) await organizeAutomatically(windowId, preferences, true)
+      }
+    }).catch(console.error)
+  }, 1000)
+}
+
 async function organizeAutomatically(windowId: number, preferences: Preferences, onlyThisWindow = false, onCreate = false) {
   if (!await isWindowAutoGroupingEnabled(windowId)) return
   const rules = await getRules()
@@ -255,16 +273,26 @@ async function organizeAutomatically(windowId: number, preferences: Preferences,
   if (preferences.autoCollapseGroups) await collapseGroupsForTabs(tabs, options)
 }
 
+const pendingTabEvents = new Map<string, Promise<void>>()
 async function groupAfterTabEvent(tabId: number, onCreate = false, attached = false) {
-  return queueWindowAutomation(async () => {
-    const tab = await chrome.tabs.get(tabId).catch(() => undefined)
-    if (!tab) return
+  const eventTab = await chrome.tabs.get(tabId).catch(() => undefined)
+  if (!eventTab) return
+  const key = `${eventTab.windowId}:${onCreate}:${attached}`
+  const pending = pendingTabEvents.get(key)
+  if (pending) return pending
+  const task = queueWindowAutomation(async () => {
+    // Keep at most one queued follow-up per window/event kind while a scan runs.
+    pendingTabEvents.delete(key)
+    const window = await chrome.windows.get(eventTab.windowId).catch(() => undefined)
+    if (!window) return
     const preferences = await getPreferences()
     const enabled = attached
       ? preferences.autoGroupOnCreate || preferences.autoGroupOnUpdate
       : onCreate ? preferences.autoGroupOnCreate : preferences.autoGroupOnUpdate
-    if (enabled) await organizeAutomatically(tab.windowId, preferences, attached || onCreate, onCreate)
+    if (enabled) await organizeAutomatically(eventTab.windowId, preferences, attached || onCreate, onCreate)
   })
+  pendingTabEvents.set(key, task)
+  return task
 }
 
 async function reconcileSnoozeAlarms() {
@@ -310,6 +338,7 @@ chrome.runtime.onStartup.addListener(() => {
 })
 
 chrome.tabs.onCreated.addListener(async (tab) => {
+  scheduleWindowStateReconciliation()
   const preferences = await getPreferences()
   if (preferences.autoDeduplicateTabs) {
     await deduplicateByScope(preferences.duplicateScope)
@@ -322,6 +351,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   const navigationChanged = changeInfo.status === 'complete' || typeof changeInfo.url === 'string'
   if (!navigationChanged && typeof changeInfo.title !== 'string') return
+  scheduleWindowStateReconciliation()
   const preferences = await getPreferences()
   if (navigationChanged && preferences.autoDeduplicateTabs) {
     await deduplicateByScope(preferences.duplicateScope)
@@ -332,12 +362,21 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
 })
 
 chrome.tabs.onAttached.addListener(async (tabId) => {
+  scheduleWindowStateReconciliation()
   await groupAfterTabEvent(tabId, false, true)
 })
+
+chrome.tabs.onRemoved.addListener(scheduleWindowStateReconciliation)
+chrome.tabs.onMoved.addListener(scheduleWindowStateReconciliation)
+chrome.tabs.onDetached.addListener(scheduleWindowStateReconciliation)
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
   await queueWindowAutomation(() => clearWindowAutoGroupingState(windowId))
 })
+
+// Covers browser/extension restarts without relying on onStartup ordering.
+// Unknown windows stay paused until this quiet-period identity check succeeds.
+scheduleWindowStateReconciliation()
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith(SNOOZE_ALARM_PREFIX)) {

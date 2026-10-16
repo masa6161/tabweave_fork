@@ -97,9 +97,11 @@ export function createChromeMock({ tabs = [], groups = [], preferences = {}, rul
           && (query.groupId == null || tab.groupId === query.groupId),
         ).map(clone)
       },
-      async group({ tabIds, groupId }) {
+      async group({ tabIds, groupId, createProperties }) {
         const members = (Array.isArray(tabIds) ? tabIds : [tabIds]).map(requireTab)
-        const windowId = members[0].windowId
+        const windowId = groupId == null
+          ? createProperties?.windowId ?? chrome.windows.currentId
+          : requireGroup(groupId).windowId
         if (members.some((tab) => tab.windowId !== windowId)) throw new Error('Mixed windows')
         if (groupId == null) {
           groupId = nextGroupId++
@@ -141,9 +143,9 @@ export function createChromeMock({ tabs = [], groups = [], preferences = {}, rul
     },
     windows: {
       WINDOW_ID_CURRENT: -2, onRemoved: createEvent(), currentId: tabs[0]?.windowId ?? 1,
-      async get(id) {
+      async get(id, { populate = false } = {}) {
         if (!windowIds.has(id)) throw new Error('Window closed')
-        return { id, type: 'normal' }
+        return { id, type: 'normal', ...(populate ? { tabs: [...tabMap.values()].filter((tab) => tab.windowId === id).map(clone) } : {}) }
       },
       async getCurrent() { return chrome.windows.get(chrome.windows.currentId) },
       async getLastFocused() { return chrome.windows.get(chrome.windows.currentId) },

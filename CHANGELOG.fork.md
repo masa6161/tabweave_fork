@@ -2,6 +2,22 @@
 
 [Versioning / バージョン管理](./VERSIONING.md) · [Upstream history / upstream の履歴](./CHANGELOG.md)
 
+## 0.8.1-fork.2 - 2026-10-17
+
+Based on upstream TabWeave 0.8.1. Chrome numeric version: `0.8.1.2`.
+
+### 日本語
+
+- Chrome 再起動後のウィンドウ別自動整理設定を、保存したタブ構成のハッシュと一意に一致する場合だけ復元。不明なウィンドウは停止状態を維持。
+- 連続イベントによる自動整理の待ち行列を抑制。自動整理で折りたたみ済みグループを開き直さず、操作中のグループは折りたたまない。
+- ルール・ドメイン・AI 整理のグループ作成先を元のウィンドウに指定し、意図しないウィンドウ間移動を防止。
+
+### English
+
+- Restore per-window automation after Chrome restarts only when saved tab fingerprints match uniquely; keep unidentified windows paused.
+- Coalesce automatic event bursts, preserve collapsed groups, and leave the active group expanded.
+- Create rule, domain, and AI groups in the tabs' original windows to prevent unintended cross-window moves.
+
 ## 0.8.1-fork.1 - 2026-10-14
 
 Based on upstream TabWeave 0.8.1. Chrome numeric version: `0.8.1.1`.

@@ -1,6 +1,6 @@
 # TabWeave プライバシーポリシー
 
-最終更新：2026 年 10 月 13 日
+最終更新：2026 年 10 月 16 日
 
 [English](./PRIVACY.md) · [README](./README.ja.md)
 
@@ -35,7 +35,7 @@ TabWeave は、氏名、メールアドレス、支払い情報、パスワー�
 - ルールは、ルールの同期設定に応じて `chrome.storage.local` または `chrome.storage.sync` に保存します。
 - テーマ、言語、自動整理などの一般設定は `chrome.storage.sync` に保存します。
 - AI の設定と API キーは `chrome.storage.local` に保存します。
-- ウィンドウ別の自動整理のオン・オフは `chrome.storage.session` に保存します。Chrome の再起動や拡張機能の再読み込みで消去されます。
+- 現在のウィンドウと自動整理設定の対応は `chrome.storage.session` に保存します。Chrome の再起動や拡張機能の再読み込み後に復元するため、選択したオン・オフと、タブの URL・固定状態・シークレットモードから作ったハッシュを `chrome.storage.local` にも保存します。復元用の記録には URL の原文を保存せず、同期もしません。終了時の復元に備えて閉じたウィンドウの記録も残し、未使用の記録は最大 100 件保持します。
 
 Chrome の同期が有効な場合、`chrome.storage.sync` のデータが Google アカウントを通じて同期されることがあります。TabWeave 独自のアカウントやバックエンドサービスはありません。
 

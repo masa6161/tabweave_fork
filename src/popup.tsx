@@ -604,7 +604,7 @@ export function Popup() {
                 </p>
               </div>
               <Switch
-                checked={windowAutoGrouping?.enabled ?? true}
+                checked={windowAutoGrouping?.enabled ?? false}
                 onChange={(enabled) => { void toggleWindowAutoGrouping(enabled) }}
                 disabled={loading || !windowAutoGrouping || savingWindowAutoGrouping || busy || aiBusy}
                 ariaLabel={t.windowAutoGrouping}

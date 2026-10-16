@@ -1,6 +1,6 @@
 # TabWeave Privacy Policy
 
-Last updated: October 13, 2026
+Last updated: October 16, 2026
 
 [日本語](./PRIVACY.ja.md)
 
@@ -37,7 +37,7 @@ TabWeave stores settings in Chrome extension storage:
 - Rules are stored in `chrome.storage.sync` or `chrome.storage.local`, depending on the rule sync setting.
 - General preferences are stored in `chrome.storage.sync`.
 - AI grouping settings and API keys are stored in `chrome.storage.local`.
-- Per-window automation settings are stored in `chrome.storage.session` and cleared when Chrome restarts or the extension reloads.
+- Current window automation bindings are stored in `chrome.storage.session`. To restore choices after Chrome restarts or the extension reloads, the choices and hashes of tab URLs, pinned states, and incognito state are also stored in `chrome.storage.local`. These restoration records contain no raw URLs and are not synced. Closed-window records are retained for shutdown recovery, with at most 100 unclaimed records kept.
 
 Chrome may sync data stored in `chrome.storage.sync` through the user's Google account if Chrome sync is enabled. TabWeave does not operate its own account system or backend service.
 

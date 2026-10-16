@@ -50,11 +50,13 @@ The background service worker listens for tab creation, tab updates, and extensi
 
 ## Window automation
 
-The **Auto-group this window** switch defaults to on. Automatic grouping must also be enabled in Settings (on tab creation or page updates); both Settings switches default to off. Turning the window switch off preserves existing groups and excludes that window from automatic rule grouping, domain grouping, duplicate-group merging, and group collapse, including scans triggered by other windows. Manual organize actions remain available.
+The **Auto-group this window** switch starts paused for new or unidentified windows. Automatic grouping must also be enabled in Settings (on tab creation or page updates); both Settings switches default to off. Turning the window switch off preserves existing groups and excludes that window from automatic rule grouping, domain grouping, duplicate-group merging, and group collapse, including scans triggered by other windows. Manual organize actions remain available.
 
 Turning it back on immediately organizes that window when automatic grouping is enabled. Tabs moved between windows follow the destination window's setting. Page updates include changes to the title alone.
 
-Window pause settings use `chrome.storage.session`: they survive service worker restarts and are removed when the window closes. Restarting Chrome or reloading, disabling, or updating the extension clears them. See the [Chrome Storage API](https://developer.chrome.com/docs/extensions/reference/api/storage#storage_areas).
+Window choices survive service worker restarts. For Chrome restarts and extension reloads, TabWeave saves the choice and a hash of each window's tab URLs, pinned states, and incognito state in `chrome.storage.local`. After tab events settle for one second, it restores a choice only when the complete tab configuration matches exactly one saved record and one open window. Window IDs and tab order are not used as identity. Loading, changed, identical, or otherwise unrecognized windows stay paused until safely identified or explicitly enabled. Closed-window records are retained for browser shutdown recovery; at most 100 unclaimed records are kept. Choices from older versions that were already erased by a restart cannot be recovered.
+
+Automatic events are coalesced per window. Automatic grouping preserves collapsed groups and leaves the active group expanded to avoid triggering further tab creation or loading through collapse.
 
 ## Default rules
 

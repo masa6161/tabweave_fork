@@ -183,14 +183,17 @@ export async function applyRuleToTab(rule: AutoGroupRule, tab: chrome.tabs.Tab, 
   }
   if (!await canProcessWindow(groupWindowId, options)) return 'matched-unchanged'
   const alreadyInTargetGroup = typeof existing?.id === 'number' && tab.groupId === existing.id
-  const groupId = alreadyInTargetGroup ? existing.id : await chrome.tabs.group({ tabIds: [tab.id], groupId: existing?.id })
-  const needsGroupUpdate = !existing || existing.color !== rule.color || existing.collapsed
+  const groupId = alreadyInTargetGroup ? existing.id : await chrome.tabs.group({
+    tabIds: [tab.id],
+    ...(existing ? { groupId: existing.id } : { createProperties: { windowId: groupWindowId } }),
+  })
+  const needsGroupUpdate = !existing || existing.color !== rule.color || (!options.automatic && existing.collapsed)
 
   if (needsGroupUpdate) {
     await chrome.tabGroups.update(groupId, {
       title: rule.groupTitle,
       color: rule.color,
-      collapsed: false,
+      ...(!options.automatic ? { collapsed: false } : {}),
     })
   }
 
@@ -282,6 +285,9 @@ async function collapseGroupsInWindow(windowId: number, options: GroupingOptions
 
   for (const group of groups) {
     if (group.collapsed) continue
+    // Collapsing the active group can activate/load another tab or create a
+    // new tab. That event must not feed another automatic create/collapse pass.
+    if (options.automatic && (await chrome.tabs.query({ windowId, groupId: group.id })).some((tab) => tab.active)) continue
     if (!await canProcessWindow(windowId, options)) break
     try {
       await chrome.tabGroups.update(group.id, { collapsed: true })
@@ -536,8 +542,11 @@ async function groupTabsIntoDomainGroup(windowId: number, tabIds: number[], titl
   const latest = await getLatestTabsById(tabIds.map((id) => ({ id }) as chrome.tabs.Tab), options)
   const liveTabIds = latest.filter((tab) => tab.windowId === windowId && tab.groupId === UNGROUPED_ID).map((tab) => tab.id!)
   if (liveTabIds.length === 0 || !await canProcessWindow(windowId, options)) return 0
-  const groupId = await chrome.tabs.group({ tabIds: liveTabIds as [number, ...number[]], groupId: existing?.id })
-  await chrome.tabGroups.update(groupId, { title, color, collapsed: false })
+  const groupId = await chrome.tabs.group({
+    tabIds: liveTabIds as [number, ...number[]],
+    ...(existing ? { groupId: existing.id } : { createProperties: { windowId } }),
+  })
+  await chrome.tabGroups.update(groupId, { title, color, ...(!options.automatic ? { collapsed: false } : {}) })
   return liveTabIds.length
 }
 

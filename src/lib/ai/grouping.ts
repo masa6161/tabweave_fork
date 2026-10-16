@@ -634,7 +634,10 @@ export async function applyAiGroupingPlan(plan: AiGroupingPlan, options: { saveR
       const tabIds = tabs.flatMap((tab) => typeof tab.id === 'number' ? [tab.id] : [])
       if (tabIds.length === 0) continue
       const existing = await findExistingGroup(windowId, group.title)
-      const groupId = await chrome.tabs.group({ tabIds: tabIds as [number, ...number[]], groupId: existing?.id })
+      const groupId = await chrome.tabs.group({
+        tabIds: tabIds as [number, ...number[]],
+        ...(existing ? { groupId: existing.id } : { createProperties: { windowId } }),
+      })
       await chrome.tabGroups.update(groupId, { title: group.title, color: group.color, collapsed: false })
       changed += tabIds.length
     }
