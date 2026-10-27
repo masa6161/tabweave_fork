@@ -1,5 +1,5 @@
 import { clearWindowAutoGroupingState, getAiGroupingSettings, getPreferences, getRules, getSnapshots, getSnoozedTabs, isWindowAutoGroupingEnabled, saveSnoozedTabs, saveSnapshots, setWindowAutoGroupingEnabled } from './lib/storage'
-import { applyRulesToTabs, collapseGroupsByScope, collapseGroupsForTabs, consolidateDuplicateGroupsForTabs, queryTabsByScope } from './lib/grouping'
+import { applyRulesToCreatedTabs, applyRulesToTabs, collapseGroupsByScope, collapseGroupsForTabs, consolidateDuplicateGroupsForTabs, queryTabsByScope } from './lib/grouping'
 import { applyAiGroupingPlan, generateAiGroupingPlan } from './lib/ai/grouping'
 import { deduplicateByScope } from './lib/deduplication'
 import { hibernateByScope } from './lib/hibernation'
@@ -254,42 +254,53 @@ function scheduleWindowStateReconciliation() {
       if (revision !== windowStateRevision) return
       const restored = await reconcileWindowAutoGrouping(() => revision === windowStateRevision)
       const preferences = await getPreferences()
-      if (preferences.autoGroupOnCreate || preferences.autoGroupOnUpdate) {
+      if (preferences.autoGroupOnUpdate) {
         for (const windowId of restored) await organizeAutomatically(windowId, preferences, true)
       }
     }).catch(console.error)
   }, 1000)
 }
 
-async function organizeAutomatically(windowId: number, preferences: Preferences, onlyThisWindow = false, onCreate = false) {
+async function organizeAutomatically(windowId: number, preferences: Preferences, onlyThisWindow = false) {
   if (!await isWindowAutoGroupingEnabled(windowId)) return
   const rules = await getRules()
   const tabs = onlyThisWindow || preferences.organizeScope === 'currentWindow'
     ? await chrome.tabs.query({ windowId })
     : await queryTabsByScope('allWindows')
   const options = { automatic: true, windowIds: [...new Set(tabs.map((tab) => tab.windowId))] }
-  await applyRulesToTabs(rules, tabs, !onCreate && preferences.domainFallbackGrouping, preferences.groupMinTabs, options)
+  await applyRulesToTabs(rules, tabs, preferences.domainFallbackGrouping, preferences.groupMinTabs, options)
   await consolidateDuplicateGroupsForTabs(tabs, false, options)
   if (preferences.autoCollapseGroups) await collapseGroupsForTabs(tabs, options)
 }
 
 const pendingTabEvents = new Map<string, Promise<void>>()
+const pendingCreatedTabIds = new Map<string, Set<number>>()
 async function groupAfterTabEvent(tabId: number, onCreate = false, attached = false) {
   const eventTab = await chrome.tabs.get(tabId).catch(() => undefined)
   if (!eventTab) return
   const key = `${eventTab.windowId}:${onCreate}:${attached}`
+  if (onCreate) {
+    const tabIds = pendingCreatedTabIds.get(key) ?? new Set<number>()
+    tabIds.add(tabId)
+    pendingCreatedTabIds.set(key, tabIds)
+  }
   const pending = pendingTabEvents.get(key)
   if (pending) return pending
   const task = queueWindowAutomation(async () => {
     // Keep at most one queued follow-up per window/event kind while a scan runs.
     pendingTabEvents.delete(key)
+    const createdTabIds = [...(pendingCreatedTabIds.get(key) ?? [])]
+    pendingCreatedTabIds.delete(key)
     const window = await chrome.windows.get(eventTab.windowId).catch(() => undefined)
     if (!window) return
     const preferences = await getPreferences()
-    const enabled = attached
-      ? preferences.autoGroupOnCreate || preferences.autoGroupOnUpdate
-      : onCreate ? preferences.autoGroupOnCreate : preferences.autoGroupOnUpdate
-    if (enabled) await organizeAutomatically(eventTab.windowId, preferences, attached || onCreate, onCreate)
+    if (onCreate) {
+      if (preferences.autoGroupOnCreate) {
+        await applyRulesToCreatedTabs(await getRules(), createdTabIds, eventTab.windowId, preferences.groupMinTabs)
+      }
+    } else if (preferences.autoGroupOnUpdate) {
+      await organizeAutomatically(eventTab.windowId, preferences, attached)
+    }
   })
   pendingTabEvents.set(key, task)
   return task
@@ -424,7 +435,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       await setWindowAutoGroupingEnabled(message.windowId, message.enabled)
       if (message.enabled) {
         const preferences = await getPreferences()
-        if (preferences.autoGroupOnCreate || preferences.autoGroupOnUpdate) {
+        if (preferences.autoGroupOnUpdate) {
           await organizeAutomatically(message.windowId, preferences, true)
         }
       }

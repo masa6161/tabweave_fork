@@ -252,6 +252,41 @@ export async function applyRulesToTabs(
   return changed + await groupUngroupedTabsByDomain(latestTabs, normalizedGroupMinTabs, options)
 }
 
+export async function applyRulesToCreatedTabs(
+  rules: AutoGroupRule[],
+  tabIds: number[],
+  windowId: number,
+  groupMinTabs = DEFAULT_GROUP_MIN_TABS,
+): Promise<number> {
+  const options = { automatic: true, windowIds: [windowId] }
+  if (!await canProcessWindow(windowId, options)) return 0
+  // Existing tabs only contribute to minimum counts. Creation must never run
+  // reconciliation, fallback cleanup, consolidation or collapse on those tabs.
+  const tabs = await chrome.tabs.query({ windowId })
+  const eligibility = getRuleEligibility(rules, tabs, groupMinTabs)
+  let changed = 0
+  for (const tabId of new Set(tabIds)) {
+    const tab = await chrome.tabs.get(tabId).catch(() => undefined)
+    if (!tab || tab.windowId !== windowId || tab.groupId !== UNGROUPED_ID) continue
+    const rule = rules.find((rule) => rule.enabled && isRuleEligible(rule, tab, eligibility, groupMinTabs) && matchRule(rule, tab))
+    if (!rule) continue
+    const existing = await findExistingGroup(windowId, rule.groupTitle)
+    if (!await canProcessWindow(windowId, options)) continue
+    // A user or another extension may have grouped/moved the tab while queued
+    // or while the group lookup was awaiting completion. Preserve that choice.
+    const current = await chrome.tabs.get(tabId).catch(() => undefined)
+    if (!current || current.windowId !== windowId || current.groupId !== UNGROUPED_ID || !matchRule(rule, current)) continue
+    const groupId = await chrome.tabs.group({
+      tabIds: [tabId],
+      ...(existing ? { groupId: existing.id } : { createProperties: { windowId } }),
+    })
+    // Reusing a group must preserve its user-selected color and collapse state.
+    if (!existing) await chrome.tabGroups.update(groupId, { title: rule.groupTitle, color: rule.color })
+    changed += 1
+  }
+  return changed
+}
+
 export async function getTargetWindowId(): Promise<number | undefined> {
   try {
     const lastFocused = await chrome.windows.getLastFocused({ windowTypes: ['normal'] })

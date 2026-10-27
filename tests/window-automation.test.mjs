@@ -172,8 +172,123 @@ test('creation respects pauses and evaluates minimum counts within the new tab w
   assert.equal(fixture.calls.length, 0)
   await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(1))
   assert.equal(titleOf(1), 'Research')
-  assert.equal(titleOf(4), 'Research')
+  assert.equal(fixture.tabMap.get(4).groupId, -1)
   assert.equal(fixture.calls.every((call) => call.windowId === 10), true)
+})
+
+test('opening extension settings preserves manually added tabs and every existing group', async () => {
+  await start({
+    tabs: [makeTab(1, 10, 'Research', 50), makeTab(4, 10, 'Manually added', 50),
+      makeTab(5, 10, 'Manual', 51), makeTab(6, 10, 'Other', 52), makeTab(7, 10, 'Other', 53),
+      makeTab(2, 20), { ...makeTab(9, 10, 'VertiTab settings'), url: 'chrome-extension://vertitab/options.html' }],
+    groups: [{ id: 50, windowId: 10, title: 'Research', collapsed: true },
+      { id: 51, windowId: 10, title: 'Manual' }, { id: 52, windowId: 10, title: 'Duplicates' },
+      { id: 53, windowId: 10, title: 'Duplicates' }],
+    preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false, organizeScope: 'allWindows',
+      domainFallbackGrouping: true, groupMinTabs: 3, autoCollapseGroups: true },
+  })
+  const beforeTabs = structuredClone([...fixture.tabMap.values()])
+  const beforeGroups = structuredClone([...fixture.groupMap.values()])
+  await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(9))
+  assert.deepEqual([...fixture.tabMap.values()], beforeTabs)
+  assert.deepEqual([...fixture.groupMap.values()], beforeGroups)
+  assert.deepEqual(fixture.calls, [])
+})
+
+test('creation only adds the new tab to an existing group without recoloring or collapsing it', async () => {
+  await start({
+    tabs: [makeTab(1, 10, 'Manually added', 50), makeTab(4, 10, 'Research'), makeTab(2, 20), makeTab(9, 10)],
+    groups: [{ id: 50, windowId: 10, title: 'Research', color: 'red', collapsed: true }],
+    preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false, organizeScope: 'allWindows', autoCollapseGroups: true },
+  })
+  const beforeGroup = { ...fixture.groupMap.get(50) }
+  await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(9))
+  assert.equal(fixture.tabMap.get(9).groupId, 50)
+  assert.equal(fixture.tabMap.get(1).groupId, 50)
+  assert.equal(fixture.tabMap.get(4).groupId, -1)
+  assert.equal(fixture.tabMap.get(2).groupId, -1)
+  assert.deepEqual(fixture.groupMap.get(50), beforeGroup)
+  assert.deepEqual(fixture.calls, [{ type: 'group', windowId: 10, tabIds: [9], groupId: 50 }])
+})
+
+test('creation minimum counts do not borrow matching tabs from another window', async () => {
+  await start({
+    tabs: [makeTab(1, 10), makeTab(2, 20), makeTab(4, 20)],
+    rules: [makeRule('threshold', 'Research', 'Research', { minTabs: 2 })],
+    preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false, organizeScope: 'allWindows' },
+  })
+  await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(1))
+  assert.deepEqual(fixture.calls, [])
+})
+
+test('a new tab already grouped manually is left in its chosen group', async () => {
+  await start({
+    tabs: [makeTab(1, 10, 'Research', 50)],
+    groups: [{ id: 50, windowId: 10, title: 'Manual choice' }],
+    preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false },
+  })
+  await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(1))
+  assert.equal(fixture.tabMap.get(1).groupId, 50)
+  assert.deepEqual(fixture.calls, [])
+})
+
+test('manual grouping during the creation lookup is not overwritten', async () => {
+  await start({
+    tabs: [makeTab(1, 10), makeTab(4, 10, 'Manual', 50)],
+    groups: [{ id: 50, windowId: 10, title: 'Manual choice' }],
+    preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false },
+  })
+  const original = fixture.chrome.tabGroups.query
+  fixture.chrome.tabGroups.query = async (query) => {
+    const groups = await original(query)
+    fixture.tabMap.get(1).groupId = 50
+    return groups
+  }
+  await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(1))
+  assert.equal(fixture.tabMap.get(1).groupId, 50)
+  assert.deepEqual(fixture.calls, [])
+})
+
+test('creation bursts retain every new tab while leaving pre-existing tabs untouched', async () => {
+  await start({
+    tabs: [makeTab(1, 10), ...Array.from({ length: 20 }, (_, index) => makeTab(index + 10, 10))],
+    preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false },
+  })
+  let release
+  let entered
+  const gate = new Promise((resolve) => { release = resolve })
+  const blocked = new Promise((resolve) => { entered = resolve })
+  const originalGroup = fixture.chrome.tabs.group
+  const originalQuery = fixture.chrome.tabs.query
+  let scans = 0
+  fixture.chrome.tabs.query = async (query) => { scans++; return originalQuery(query) }
+  fixture.chrome.tabs.group = async (args) => { entered(); await gate; return originalGroup(args) }
+  const first = fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(10))
+  await blocked
+  const burst = Array.from({ length: 19 }, (_, index) => fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(index + 11)))
+  for (let i = 0; i < 10; i++) await Promise.resolve()
+  release()
+  await Promise.all([first, ...burst])
+  for (let id = 10; id < 30; id++) assert.equal(titleOf(id), 'Research')
+  assert.equal(fixture.tabMap.get(1).groupId, -1)
+  assert.ok(scans <= 2, `expected at most two creation batches, got ${scans}`)
+})
+
+test('creation-only automation does not scan old tabs when resumed, restored or attached', async () => {
+  await start({
+    tabs: [{ ...makeTab(1, 10), url: 'https://one.example/' }, { ...makeTab(2, 20), url: 'https://two.example/' }],
+    preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false },
+  })
+  await toggle(10, false)
+  await toggle(10, true)
+  assert.deepEqual(fixture.calls, [])
+  fixture.chrome.storage.session.data.clear()
+  mock.timers.tick(1000)
+  await toggle(20, false)
+  assert.equal(await isWindowAutoGroupingEnabled(10), true)
+  fixture.tabMap.get(2).windowId = 10
+  await fixture.chrome.tabs.onAttached.emit(2, { newWindowId: 10, newPosition: 1 })
+  assert.deepEqual(fixture.calls, [])
 })
 
 test('unrelated updates are inert and title-only changes do not trigger automatic tab deletion', async () => {

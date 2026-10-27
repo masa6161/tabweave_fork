@@ -2,6 +2,26 @@
 
 [Versioning / バージョン管理](./VERSIONING.md) · [Upstream history / upstream の履歴](./CHANGELOG.md)
 
+## 0.8.1-fork.3 - 2026-10-27
+
+Based on upstream TabWeave 0.8.1. Chrome numeric version: `0.8.1.3`.
+
+### 日本語
+
+- 作成時の自動整理を、新しく作成された未グループのタブだけに限定。設定画面などを開いた際に、既存タブの手動グループ分けを再分類・解除しない。
+- 既存グループの統合、色変更、折りたたみ、枚数不足による解除を作成時の整理から除外。最低枚数の判定では既存タブを参照するが、変更はしない。
+- 処理待ちの間にユーザーや他の拡張機能がグループへ追加したタブを保護し、連続して作成されたタブも取りこぼさず処理。
+- 作成時のみ自動整理が有効な場合は、ウィンドウ設定の復元・ON 切替・タブのウィンドウ間移動で全体整理を行わない。
+- 日英の設定説明と回帰テストを更新。
+
+### English
+
+- Limit automatic grouping on creation to newly created, ungrouped tabs. Opening settings or another tab no longer reclassifies or ungroups existing manually grouped tabs.
+- Skip existing-group consolidation, recoloring, collapse, and below-threshold cleanup during creation handling. Existing tabs only contribute to minimum-count checks.
+- Preserve tabs grouped by the user or another extension while work is queued, and retain every newly created tab when batching event bursts.
+- When only creation automation is enabled, restoring or enabling a window's automation and attaching tabs from another window no longer trigger a full-window scan.
+- Update Japanese/English setting descriptions and regression tests.
+
 ## 0.8.1-fork.2 - 2026-10-17
 
 Based on upstream TabWeave 0.8.1. Chrome numeric version: `0.8.1.2`.
