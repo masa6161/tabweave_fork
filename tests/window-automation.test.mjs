@@ -63,6 +63,129 @@ test('title removal ungroups a tab that no longer matches its managed group', as
   assert.equal(fixture.tabMap.get(1).groupId, -1)
 })
 
+for (const trigger of ['update', 'button']) {
+  test(`ungrouped-only ${trigger} preserves grouped tabs, duplicate groups and group appearance`, async () => {
+    await start({
+      tabs: [makeTab(1, 10, 'Research', 50), makeTab(2, 10, 'No longer matches', 51),
+        makeTab(3, 10, 'Research', 52), makeTab(4, 10, 'Other', 53),
+        makeTab(5, 10, 'Research'), makeTab(6, 10, 'Inbox')],
+      groups: [{ id: 50, windowId: 10, title: 'Personal' },
+        { id: 51, windowId: 10, title: 'Research', color: 'red', collapsed: true },
+        { id: 52, windowId: 10, title: 'Research', color: 'yellow' },
+        { id: 53, windowId: 10, title: 'Other' }],
+      rules: [makeRule('research', 'Research', 'Research', { minTabs: 3 }), makeRule('mail', 'Inbox', 'Mail')],
+      preferences: { autoGroupOnUpdate: true, organizeUngroupedOnly: true, domainFallbackGrouping: true,
+        groupMinTabs: 3, autoCollapseGroups: true, organizeScope: 'allWindows' },
+    })
+    const originalGroups = structuredClone([...fixture.groupMap.values()])
+    if (trigger === 'update') {
+      await update(1, { title: 'Research revised' })
+    } else {
+      const response = await fixture.chrome.runtime.sendMessage({ type: 'TABWEAVE_REGROUP' })
+      assert.equal(response.ok, true)
+      assert.equal(response.checked, 2)
+      assert.equal(response.changed, 2)
+      assert.equal(response.consolidated, 0)
+      assert.equal(response.collapsed, 1)
+    }
+    for (const [id, groupId] of [[1, 50], [2, 51], [3, 52], [4, 53]]) {
+      assert.equal(fixture.tabMap.get(id).groupId, groupId)
+    }
+    for (const group of originalGroups) assert.deepEqual(fixture.groupMap.get(group.id), group)
+    // Existing matching tabs count toward the rule threshold without being moved.
+    assert.equal(fixture.tabMap.get(5).groupId, 51)
+    assert.equal(titleOf(6), 'Mail')
+    assert.equal(fixture.groupMap.get(fixture.tabMap.get(6).groupId).collapsed, true)
+    assert.deepEqual(fixture.calls.filter((call) => call.type === 'group').flatMap((call) => call.tabIds), [5, 6])
+  })
+
+  test(`ungrouped-only ${trigger} supports domain fallback without changing existing groups`, async () => {
+    await start({
+      tabs: [makeTab(1, 10, 'Example', 50), makeTab(2, 10, 'Example'),
+        makeTab(3, 10, 'Example'), makeTab(4, 10, 'Example'),
+        { ...makeTab(5, 10, 'Solo', 51), url: 'https://solo.test/' }],
+      groups: [{ id: 50, windowId: 10, title: 'Example', color: 'red', collapsed: true },
+        { id: 51, windowId: 10, title: 'Solo' }],
+      rules: [],
+      preferences: { autoGroupOnUpdate: true, organizeUngroupedOnly: true,
+        domainFallbackGrouping: true, groupMinTabs: 3, autoCollapseGroups: true },
+    })
+    const originalGroups = structuredClone([...fixture.groupMap.values()])
+    if (trigger === 'update') await update(2, { status: 'complete' })
+    else assert.equal((await fixture.chrome.runtime.sendMessage({ type: 'TABWEAVE_REGROUP' })).ok, true)
+    for (const id of [1, 2, 3, 4]) assert.equal(fixture.tabMap.get(id).groupId, 50)
+    assert.equal(fixture.tabMap.get(5).groupId, 51)
+    assert.deepEqual([...fixture.groupMap.values()], originalGroups)
+    assert.equal(fixture.calls.some((call) => call.type === 'ungroup' || call.type === 'update-group'), false)
+  })
+}
+
+test('disabling ungrouped-only organization restores reclassification of existing grouped tabs', async () => {
+  await start({
+    tabs: [makeTab(1, 10, 'Research', 50)],
+    groups: [{ id: 50, windowId: 10, title: 'Personal' }],
+    rules: [research],
+    preferences: { autoGroupOnUpdate: true, organizeUngroupedOnly: true, domainFallbackGrouping: false },
+  })
+  await update(1, { title: 'Research revised' })
+  assert.equal(titleOf(1), 'Personal')
+  fixture.chrome.storage.sync.data.get('tabweave.preferences').organizeUngroupedOnly = false
+  await update(1, { title: 'Research revised again' })
+  assert.equal(titleOf(1), 'Research')
+})
+
+test('ungrouped-only organization preserves manual grouping done while a rule lookup is awaiting', async () => {
+  await start({
+    tabs: [makeTab(1, 10), makeTab(2, 10, 'Other', 50)],
+    groups: [{ id: 50, windowId: 10, title: 'Personal' }],
+    rules: [research],
+  })
+  const originalQuery = fixture.chrome.tabGroups.query
+  fixture.chrome.tabGroups.query = async (query) => {
+    const groups = await originalQuery(query)
+    fixture.tabMap.get(1).groupId = 50
+    return groups
+  }
+  const changed = await applyRulesToTabs([research], [...fixture.tabMap.values()], false, 1, { ungroupedOnly: true })
+  assert.equal(changed, 0)
+  assert.equal(fixture.tabMap.get(1).groupId, 50)
+  assert.deepEqual(fixture.calls, [])
+})
+
+test('ungrouped-only Organize also excludes grouped tabs from deduplication and hibernation', async () => {
+  await start({
+    tabs: [makeTab(1, 10, 'Grouped', 50), makeTab(2, 10, 'Grouped', 50),
+      makeTab(3, 10), makeTab(4, 10), { ...makeTab(5, 10), url: 'https://other.test/' }]
+      .map((tab) => ({ ...tab, lastAccessed: 0 })),
+    groups: [{ id: 50, windowId: 10, title: 'Personal', color: 'red' }],
+    rules: [],
+    preferences: { organizeUngroupedOnly: true, deduplicateOnOrganize: true, hibernateOnOrganize: true,
+      hibernateAfterMinutes: 1, domainFallbackGrouping: false },
+  })
+  const originalTabs = [1, 2].map((id) => structuredClone(fixture.tabMap.get(id)))
+  const response = await fixture.chrome.runtime.sendMessage({ type: 'TABWEAVE_REGROUP' })
+  assert.equal(response.ok, true)
+  assert.equal(response.deduplicated.closed, 1)
+  assert.equal(response.hibernated.discarded, 2)
+  assert.equal(response.checked, 2)
+  assert.deepEqual([1, 2].map((id) => fixture.tabMap.get(id)), originalTabs)
+  assert.deepEqual(fixture.calls.filter((call) => call.type === 'remove').map((call) => call.id), [4])
+  assert.deepEqual(fixture.calls.filter((call) => call.type === 'discard').map((call) => call.id), [3, 5])
+})
+
+test('ungrouped-only page navigation leaves grouped duplicate tabs intact', async () => {
+  await start({
+    tabs: [makeTab(1, 10, 'Grouped', 50), makeTab(2, 10, 'Grouped', 50), makeTab(3, 10), makeTab(4, 10)],
+    groups: [{ id: 50, windowId: 10, title: 'Personal' }],
+    rules: [],
+    preferences: { autoGroupOnUpdate: true, organizeUngroupedOnly: true, autoDeduplicateTabs: true, domainFallbackGrouping: false },
+  })
+  await update(1, { status: 'complete' })
+  assert.deepEqual(fixture.calls, [{ type: 'remove', windowId: 10, id: 4 }])
+  assert.equal(fixture.tabMap.get(1).groupId, 50)
+  assert.equal(fixture.tabMap.get(2).groupId, 50)
+})
+
 test('all-window scans skip paused rules, fallback cleanup, merges, and collapse', async () => {
   await start({
     tabs: [makeTab(1, 10), makeTab(2, 20, 'Research', 50), makeTab(4, 20, 'Research', 51), makeTab(5, 20, 'Other'), makeTab(6, 20, 'Other'), makeTab(3, 30)],

@@ -1,4 +1,4 @@
-import { getTargetWindowId } from './grouping'
+import { getTargetWindowId, UNGROUPED_ID } from './grouping'
 import { saveLastHibernateResult } from './storage'
 import type { HibernateResult, Preferences, RuleScope } from './types'
 
@@ -108,13 +108,17 @@ export async function queryHibernateTabs(scope: RuleScope): Promise<chrome.tabs.
   return chrome.tabs.query({ currentWindow: true })
 }
 
-export async function hibernateTabs(tabs: chrome.tabs.Tab[], preferences: Preferences): Promise<HibernateResult> {
+export async function hibernateTabs(tabs: chrome.tabs.Tab[], preferences: Preferences, ungroupedOnly = false): Promise<HibernateResult> {
   const now = Date.now()
-  const candidates = tabs.filter((tab) => canHibernateTab(tab, preferences, now))
+  const candidates = tabs.filter((tab) => (!ungroupedOnly || tab.groupId === UNGROUPED_ID) && canHibernateTab(tab, preferences, now))
   let discarded = 0
 
   for (const tab of candidates) {
     if (typeof tab.id !== 'number') continue
+    if (ungroupedOnly) {
+      const current = await chrome.tabs.get(tab.id).catch(() => undefined)
+      if (!current || current.groupId !== UNGROUPED_ID || !canHibernateTab(current, preferences, now)) continue
+    }
     const result = await chrome.tabs.discard(tab.id).catch(() => undefined)
     if (result?.discarded) discarded += 1
   }
@@ -130,6 +134,6 @@ export async function hibernateTabs(tabs: chrome.tabs.Tab[], preferences: Prefer
   return report
 }
 
-export async function hibernateByScope(preferences: Preferences): Promise<HibernateResult> {
-  return hibernateTabs(await queryHibernateTabs(preferences.hibernateScope), preferences)
+export async function hibernateByScope(preferences: Preferences, ungroupedOnly = false): Promise<HibernateResult> {
+  return hibernateTabs(await queryHibernateTabs(preferences.hibernateScope), preferences, ungroupedOnly)
 }

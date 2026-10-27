@@ -1,7 +1,7 @@
 {
   "name": "tabweave",
   "private": true,
-  "version": "0.8.1-fork.3",
+  "version": "0.8.1-fork.4",
   "type": "module",
   "scripts": {
     "dev": "vite",

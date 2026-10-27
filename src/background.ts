@@ -1,5 +1,5 @@
 import { clearWindowAutoGroupingState, getAiGroupingSettings, getPreferences, getRules, getSnapshots, getSnoozedTabs, isWindowAutoGroupingEnabled, saveSnoozedTabs, saveSnapshots, setWindowAutoGroupingEnabled } from './lib/storage'
-import { applyRulesToCreatedTabs, applyRulesToTabs, collapseGroupsByScope, collapseGroupsForTabs, consolidateDuplicateGroupsForTabs, queryTabsByScope } from './lib/grouping'
+import { applyRulesToCreatedTabs, applyRulesToTabs, collapseGroupsForTabs, consolidateDuplicateGroupsForTabs, queryTabsByScope, UNGROUPED_ID } from './lib/grouping'
 import { applyAiGroupingPlan, generateAiGroupingPlan } from './lib/ai/grouping'
 import { deduplicateByScope } from './lib/deduplication'
 import { hibernateByScope } from './lib/hibernation'
@@ -181,11 +181,12 @@ async function updateHibernateAlarm(preferences?: Preferences) {
 
 async function regroupCurrentWindow(preferences?: Preferences) {
   const resolvedPreferences = preferences ?? await getPreferences()
+  const options = { ungroupedOnly: resolvedPreferences.organizeUngroupedOnly }
   const deduplicated = resolvedPreferences.deduplicateOnOrganize
-    ? await deduplicateByScope(resolvedPreferences.duplicateScope)
+    ? await deduplicateByScope(resolvedPreferences.duplicateScope, options.ungroupedOnly)
     : { closed: 0, duplicates: 0 }
   const hibernated = resolvedPreferences.hibernateOnOrganize
-    ? await hibernateByScope(resolvedPreferences)
+    ? await hibernateByScope(resolvedPreferences, options.ungroupedOnly)
     : { discarded: 0, checked: 0, candidates: 0, skipped: 0, timestamp: Date.now() }
   const rules = await getRules()
   const tabs = await queryTabsByScope(resolvedPreferences.organizeScope)
@@ -194,12 +195,14 @@ async function regroupCurrentWindow(preferences?: Preferences) {
     tabs,
     resolvedPreferences.domainFallbackGrouping,
     resolvedPreferences.groupMinTabs,
+    options,
   )
-  const consolidated = await consolidateDuplicateGroupsForTabs(tabs, true)
+  const consolidated = await consolidateDuplicateGroupsForTabs(tabs, true, options)
   const collapsed = resolvedPreferences.autoCollapseGroups
-    ? await collapseGroupsByScope(resolvedPreferences.organizeScope)
+    ? await collapseGroupsForTabs(tabs, options)
     : 0
-  return { checked: tabs.length, changed: changed + consolidated, collapsed, consolidated, deduplicated, hibernated }
+  const checked = options.ungroupedOnly ? tabs.filter((tab) => tab.groupId === UNGROUPED_ID).length : tabs.length
+  return { checked, changed: changed + consolidated, collapsed, consolidated, deduplicated, hibernated }
 }
 
 async function deduplicateConfiguredTabs() {
@@ -267,7 +270,7 @@ async function organizeAutomatically(windowId: number, preferences: Preferences,
   const tabs = onlyThisWindow || preferences.organizeScope === 'currentWindow'
     ? await chrome.tabs.query({ windowId })
     : await queryTabsByScope('allWindows')
-  const options = { automatic: true, windowIds: [...new Set(tabs.map((tab) => tab.windowId))] }
+  const options = { automatic: true, windowIds: [...new Set(tabs.map((tab) => tab.windowId))], ungroupedOnly: preferences.organizeUngroupedOnly }
   await applyRulesToTabs(rules, tabs, preferences.domainFallbackGrouping, preferences.groupMinTabs, options)
   await consolidateDuplicateGroupsForTabs(tabs, false, options)
   if (preferences.autoCollapseGroups) await collapseGroupsForTabs(tabs, options)
@@ -352,7 +355,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
   scheduleWindowStateReconciliation()
   const preferences = await getPreferences()
   if (preferences.autoDeduplicateTabs) {
-    await deduplicateByScope(preferences.duplicateScope)
+    await deduplicateByScope(preferences.duplicateScope, preferences.organizeUngroupedOnly)
   }
   if (preferences.autoGroupOnCreate) {
     if (typeof tab.id === 'number') await groupAfterTabEvent(tab.id, true)
@@ -365,7 +368,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   scheduleWindowStateReconciliation()
   const preferences = await getPreferences()
   if (navigationChanged && preferences.autoDeduplicateTabs) {
-    await deduplicateByScope(preferences.duplicateScope)
+    await deduplicateByScope(preferences.duplicateScope, preferences.organizeUngroupedOnly)
   }
   if (preferences.autoGroupOnUpdate) {
     await groupAfterTabEvent(tabId)

@@ -1,5 +1,5 @@
 import type { RuleScope } from './types'
-import { getTargetWindowId } from './grouping'
+import { getTargetWindowId, UNGROUPED_ID } from './grouping'
 
 export interface DeduplicateResult {
   closed: number
@@ -55,11 +55,12 @@ export async function queryDeduplicateTabs(scope: RuleScope): Promise<chrome.tab
   return chrome.tabs.query({ currentWindow: true })
 }
 
-export async function deduplicateTabs(tabs: chrome.tabs.Tab[]): Promise<DeduplicateResult> {
+export async function deduplicateTabs(tabs: chrome.tabs.Tab[], ungroupedOnly = false): Promise<DeduplicateResult> {
   const byUrl = new Map<string, chrome.tabs.Tab[]>()
 
   for (const tab of tabs) {
     if (typeof tab.id !== 'number') continue
+    if (ungroupedOnly && tab.groupId !== UNGROUPED_ID) continue
     const normalizedUrl = normalizeDuplicateUrl(tab.url)
     if (!normalizedUrl) continue
     byUrl.set(normalizedUrl, [...(byUrl.get(normalizedUrl) ?? []), tab])
@@ -84,13 +85,17 @@ export async function deduplicateTabs(tabs: chrome.tabs.Tab[]): Promise<Deduplic
     )
   }
 
-  if (removableIds.length > 0) {
-    await chrome.tabs.remove(removableIds)
+  const liveRemovableIds = ungroupedOnly
+    ? (await Promise.all(removableIds.map((id) => chrome.tabs.get(id).catch(() => undefined))))
+      .flatMap((tab) => tab && typeof tab.id === 'number' && tab.groupId === UNGROUPED_ID && !isProtectedTab(tab) ? [tab.id] : [])
+    : removableIds
+  if (liveRemovableIds.length > 0) {
+    await chrome.tabs.remove(liveRemovableIds)
   }
 
-  return { closed: removableIds.length, duplicates }
+  return { closed: liveRemovableIds.length, duplicates }
 }
 
-export async function deduplicateByScope(scope: RuleScope): Promise<DeduplicateResult> {
-  return deduplicateTabs(await queryDeduplicateTabs(scope))
+export async function deduplicateByScope(scope: RuleScope, ungroupedOnly = false): Promise<DeduplicateResult> {
+  return deduplicateTabs(await queryDeduplicateTabs(scope), ungroupedOnly)
 }

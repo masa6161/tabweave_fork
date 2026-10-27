@@ -128,6 +128,12 @@ export function createChromeMock({ tabs = [], groups = [], preferences = {}, rul
         }
         pruneGroups()
       },
+      async discard(id) {
+        const tab = requireTab(id)
+        calls.push({ type: 'discard', windowId: tab.windowId, id })
+        tab.discarded = true
+        return clone(tab)
+      },
     },
     tabGroups: {
       TAB_GROUP_ID_NONE: -1,

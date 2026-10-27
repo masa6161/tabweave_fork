@@ -60,6 +60,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   autoGroupOnCreate: false,
   autoGroupOnUpdate: false,
   organizeScope: 'currentWindow',
+  organizeUngroupedOnly: false,
   autoDeduplicateTabs: false,
   deduplicateOnOrganize: false,
   autoHibernateTabs: false,

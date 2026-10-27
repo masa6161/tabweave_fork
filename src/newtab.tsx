@@ -13,11 +13,12 @@ import { applyLanguage, getMessages } from './lib/i18n'
 import { localizeErrorMessage } from './lib/localized-errors'
 import {
   applyRulesToTabs,
-  collapseGroupsByScope,
+  collapseGroupsForTabs,
   consolidateDuplicateGroupsForTabs,
   createGroupFromTabs,
   getCurrentWindowSnapshot,
   queryTabsByScope,
+  UNGROUPED_ID,
 } from './lib/grouping'
 import type { AiGroupingPlan, ChromeGroupColor, GroupSnapshot, Preferences, SessionSnapshot, SessionSnapshotTab, SnoozeItem, TabSnapshot, WindowSnapshot } from './lib/types'
 import { EmptyState, GhostButton, PrimaryButton, TextInput } from './components/ui'
@@ -1796,10 +1797,12 @@ export function NewTab() {
     try {
       const rules = await getRules()
       const tabs = await queryTabsByScope(preferences.organizeScope)
-      const changed = await applyRulesToTabs(rules, tabs, preferences.domainFallbackGrouping, preferences.groupMinTabs)
-      await consolidateDuplicateGroupsForTabs(tabs)
-      if (preferences.autoCollapseGroups) await collapseGroupsByScope(preferences.organizeScope)
-      setMessage(t.organized.replace('{checked}', String(tabs.length)).replace('{changed}', String(changed)))
+      const options = { ungroupedOnly: preferences.organizeUngroupedOnly }
+      const changed = await applyRulesToTabs(rules, tabs, preferences.domainFallbackGrouping, preferences.groupMinTabs, options)
+      await consolidateDuplicateGroupsForTabs(tabs, false, options)
+      if (preferences.autoCollapseGroups) await collapseGroupsForTabs(tabs, options)
+      const checked = options.ungroupedOnly ? tabs.filter((tab) => tab.groupId === UNGROUPED_ID).length : tabs.length
+      setMessage(t.organized.replace('{checked}', String(checked)).replace('{changed}', String(changed)))
       await refresh()
     } finally {
       setBusy(false)

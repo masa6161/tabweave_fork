@@ -69,6 +69,16 @@ test('Chinese language preferences remain Chinese on read, import normalization 
   assert.equal(fixture.chrome.storage.sync.data.get(STORAGE_KEYS.preferences).languageMode, 'zh')
 })
 
+test('ungrouped-only organization defaults off and persists across preference changes and languages', async () => {
+  assert.equal(normalizePreferences({}).organizeUngroupedOnly, false)
+  await savePreferences({ ...normalizePreferences({ languageMode: 'ja' }), organizeUngroupedOnly: true })
+  assert.equal((await getPreferences()).organizeUngroupedOnly, true)
+  await savePreferences({ ...await getPreferences(), languageMode: 'en', autoGroupOnUpdate: true })
+  assert.equal((await getPreferences()).organizeUngroupedOnly, true)
+  assert.equal(getMessages('zh').organizeUngroupedOnly, getMessages('en').organizeUngroupedOnly)
+  assert.equal(getMessages('zh').organizeUngroupedOnlyDesc, getMessages('en').organizeUngroupedOnlyDesc)
+})
+
 test('legacy initial rule names and docs pattern migrate while custom edits stay intact', async () => {
   const oldRules = DEFAULT_RULES.map((rule) => ({ ...rule, name: LEGACY_DEFAULT_RULE_NAMES[rule.id] }))
   const docs = oldRules.find((rule) => rule.id === 'docs-default')

@@ -2,6 +2,24 @@
 
 [Versioning / バージョン管理](./VERSIONING.md) · [Upstream history / upstream の履歴](./CHANGELOG.md)
 
+## 0.8.1-fork.4 - 2026-10-28
+
+Based on upstream TabWeave 0.8.1. Chrome numeric version: `0.8.1.4`.
+
+### 日本語
+
+- 「未グループのタブだけを整理」を設定に追加。ページ更新時の自動整理と、ポップアップ・サイドパネル・設定画面・新規タブ画面の整理ボタンに適用。初期値はオフで、従来の動作を維持。
+- 有効時は、既存タブの再分類、グループの統合・枚数不足による解除、既存グループの色・開閉状態の変更を抑止。未グループのタブは既存グループへ追加可能。
+- 整理時の重複削除・休止と、タブ作成・ページ移動時の自動重複削除でも、グループ所属済みのタブを保護。
+- 日英の設定表示、設定保存、更新時・ボタン操作時の保護、処理待ち中の手動グループ分けを検証する回帰テストを追加。
+
+### English
+
+- Add an "Only organize ungrouped tabs" setting for page-update automation and Organize buttons in the popup, side panel, settings, and new-tab dashboard. It defaults to off to preserve existing behavior.
+- When enabled, preserve grouped tabs, skip group consolidation and below-threshold cleanup, and retain existing group colors and collapse states. Ungrouped tabs can still join existing groups.
+- Protect grouped tabs from deduplication and hibernation performed by Organize, and from automatic deduplication on tab creation or navigation.
+- Add Japanese/English labels and regression coverage for persistence, update/button handling, and manual grouping while work is pending.
+
 ## 0.8.1-fork.3 - 2026-10-27
 
 Based on upstream TabWeave 0.8.1. Chrome numeric version: `0.8.1.3`.

@@ -44,6 +44,7 @@ export interface Preferences {
   autoGroupOnCreate: boolean
   autoGroupOnUpdate: boolean
   organizeScope: RuleScope
+  organizeUngroupedOnly: boolean
   autoDeduplicateTabs: boolean
   deduplicateOnOrganize: boolean
   autoHibernateTabs: boolean

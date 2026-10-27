@@ -6,6 +6,7 @@ import { getMessages } from './i18n'
 export type GroupingOptions = {
   automatic?: boolean
   windowIds?: number[]
+  ungroupedOnly?: boolean
 }
 
 async function canProcessWindow(windowId: number, options: GroupingOptions) {
@@ -173,13 +174,15 @@ function getRuleEligibility(rules: AutoGroupRule[], tabs: chrome.tabs.Tab[], def
 
 export async function applyRuleToTab(rule: AutoGroupRule, tab: chrome.tabs.Tab, options: GroupingOptions = {}): Promise<ApplyRuleResult> {
   if (!tab.id) return 'no-match'
+  if (options.ungroupedOnly && tab.groupId !== UNGROUPED_ID) return 'matched-unchanged'
   if (!matchRule(rule, tab)) return 'no-match'
 
   const groupWindowId = tab.windowId
   const existing = await findExistingGroup(groupWindowId, rule.groupTitle)
-  if (options.automatic) {
+  if (options.automatic || options.ungroupedOnly) {
     const current = await chrome.tabs.get(tab.id).catch(() => undefined)
     if (!current || current.windowId !== groupWindowId || !matchRule(rule, current)) return 'matched-unchanged'
+    if (options.ungroupedOnly && current.groupId !== UNGROUPED_ID) return 'matched-unchanged'
   }
   if (!await canProcessWindow(groupWindowId, options)) return 'matched-unchanged'
   const alreadyInTargetGroup = typeof existing?.id === 'number' && tab.groupId === existing.id
@@ -187,7 +190,7 @@ export async function applyRuleToTab(rule: AutoGroupRule, tab: chrome.tabs.Tab, 
     tabIds: [tab.id],
     ...(existing ? { groupId: existing.id } : { createProperties: { windowId: groupWindowId } }),
   })
-  const needsGroupUpdate = !existing || existing.color !== rule.color || (!options.automatic && existing.collapsed)
+  const needsGroupUpdate = !existing || (!options.ungroupedOnly && (existing.color !== rule.color || (!options.automatic && existing.collapsed)))
 
   if (needsGroupUpdate) {
     await chrome.tabGroups.update(groupId, {
@@ -208,6 +211,7 @@ export async function reconcileTabWithRules(
   defaultMinimumTabs = DEFAULT_GROUP_MIN_TABS,
   options: GroupingOptions = {},
 ): Promise<'grouped' | 'ungrouped' | 'unchanged'> {
+  if (options.ungroupedOnly && tab.groupId !== UNGROUPED_ID) return 'unchanged'
   for (const rule of rules.filter((item) => item.enabled)) {
     if (!isRuleEligible(rule, tab, eligibility, defaultMinimumTabs)) continue
     const result = await applyRuleToTab(rule, tab, options)
@@ -240,16 +244,17 @@ export async function applyRulesToTabs(
   const normalizedGroupMinTabs = normalizeGroupMinTabs(groupMinTabs)
   const latestTabs = await getLatestTabsById(tabs, options)
   const ruleEligibility = getRuleEligibility(rules, latestTabs, normalizedGroupMinTabs)
+  const candidateTabs = options.ungroupedOnly ? latestTabs.filter((tab) => tab.groupId === UNGROUPED_ID) : latestTabs
   let changed = 0
-  for (const tab of latestTabs) {
-    const currentTab = options.automatic ? await chrome.tabs.get(tab.id!).catch(() => undefined) : tab
+  for (const tab of candidateTabs) {
+    const currentTab = options.automatic || options.ungroupedOnly ? await chrome.tabs.get(tab.id!).catch(() => undefined) : tab
     if (!currentTab || currentTab.windowId !== tab.windowId || !await canProcessWindow(currentTab.windowId, options)) continue
     const result = await reconcileTabWithRules(rules, currentTab, ruleEligibility, normalizedGroupMinTabs, options)
     if (result !== 'unchanged') changed += 1
   }
   changed += await ungroupFallbackGroupsBelowThreshold(rules, latestTabs, normalizedGroupMinTabs, ruleEligibility, options)
   if (!domainFallbackGrouping) return changed
-  return changed + await groupUngroupedTabsByDomain(latestTabs, normalizedGroupMinTabs, options)
+  return changed + await groupUngroupedTabsByDomain(candidateTabs, normalizedGroupMinTabs, options)
 }
 
 export async function applyRulesToCreatedTabs(
@@ -313,12 +318,13 @@ export async function queryTabsByScope(scope: RuleScope): Promise<chrome.tabs.Ta
   return queryTargetWindowTabs()
 }
 
-async function collapseGroupsInWindow(windowId: number, options: GroupingOptions = {}): Promise<number> {
+async function collapseGroupsInWindow(windowId: number, options: GroupingOptions = {}, preservedGroupIds = new Set<number>()): Promise<number> {
   if (!await canProcessWindow(windowId, options)) return 0
   const groups = await chrome.tabGroups.query({ windowId })
   let collapsed = 0
 
   for (const group of groups) {
+    if (preservedGroupIds.has(group.id)) continue
     if (group.collapsed) continue
     // Collapsing the active group can activate/load another tab or create a
     // new tab. That event must not feed another automatic create/collapse pass.
@@ -336,7 +342,10 @@ async function collapseGroupsInWindow(windowId: number, options: GroupingOptions
 }
 
 export async function collapseGroupsForTabs(tabs: chrome.tabs.Tab[], options: GroupingOptions = {}): Promise<number> {
-  const counts = await Promise.all(getWindowIdsFromTabs(tabs).map((windowId) => collapseGroupsInWindow(windowId, options)))
+  // The input is the snapshot from before grouping. Only new groups may be
+  // collapsed when existing grouped tabs are excluded from organization.
+  const preservedGroupIds = new Set(options.ungroupedOnly ? tabs.flatMap((tab) => typeof tab.groupId === 'number' && tab.groupId !== UNGROUPED_ID ? [tab.groupId] : []) : [])
+  const counts = await Promise.all(getWindowIdsFromTabs(tabs).map((windowId) => collapseGroupsInWindow(windowId, options, preservedGroupIds)))
   return counts.reduce((total, count) => total + count, 0)
 }
 
@@ -354,6 +363,7 @@ export async function collapseGroupsByScope(scope: RuleScope): Promise<number> {
 }
 
 async function consolidateDuplicateGroupsInWindow(windowId: number, options: GroupingOptions = {}): Promise<number> {
+  if (options.ungroupedOnly) return 0
   if (!await canProcessWindow(windowId, options)) return 0
   const groups = await chrome.tabGroups.query({ windowId })
   const groupsByTitle = new Map<string, chrome.tabGroups.TabGroup[]>()
@@ -581,7 +591,9 @@ async function groupTabsIntoDomainGroup(windowId: number, tabIds: number[], titl
     tabIds: liveTabIds as [number, ...number[]],
     ...(existing ? { groupId: existing.id } : { createProperties: { windowId } }),
   })
-  await chrome.tabGroups.update(groupId, { title, color, ...(!options.automatic ? { collapsed: false } : {}) })
+  if (!existing || !options.ungroupedOnly) {
+    await chrome.tabGroups.update(groupId, { title, color, ...(!options.automatic ? { collapsed: false } : {}) })
+  }
   return liveTabIds.length
 }
 
@@ -616,6 +628,7 @@ export async function ungroupFallbackGroupsBelowThreshold(
   ruleEligibility: RuleEligibility = new Map(),
   options: GroupingOptions = {},
 ): Promise<number> {
+  if (options.ungroupedOnly) return 0
   const normalizedMinimumTabs = normalizeGroupMinTabs(minimumTabs)
   const alwaysManagedGroupTitles = new Set(
     rules

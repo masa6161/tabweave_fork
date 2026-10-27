@@ -587,6 +587,7 @@ export function Options() {
     autoGroupOnCreate: false,
     autoGroupOnUpdate: false,
     organizeScope: 'currentWindow',
+    organizeUngroupedOnly: false,
     autoDeduplicateTabs: false,
     deduplicateOnOrganize: false,
     autoHibernateTabs: false,
@@ -1143,7 +1144,7 @@ export function Options() {
     if (nextValue !== preferences.groupMinTabs) {
       await updatePreferences({ groupMinTabs: nextValue })
       const tabs = await queryTabsByScope(preferences.organizeScope)
-      await ungroupFallbackGroupsBelowThreshold(rules, tabs, nextValue)
+      await ungroupFallbackGroupsBelowThreshold(rules, tabs, nextValue, undefined, { ungroupedOnly: preferences.organizeUngroupedOnly })
     }
   }
 
@@ -1717,6 +1718,13 @@ codebase.anyask.dev`} />
           <section className="rounded-[var(--opt-card-r)] bg-white/[0.04] p-[var(--opt-card-pad)] ring-1 ring-white/10">
             <h2 className="text-sm font-semibold">{t.groupingBehavior}</h2>
             <div className="mt-[var(--opt-section-gap)] space-y-[var(--opt-section-gap)]">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm text-zinc-200">{t.organizeUngroupedOnly}</div>
+                  <div id="organize-ungrouped-only-description" className="text-xs text-zinc-600">{t.organizeUngroupedOnlyDesc}</div>
+                </div>
+                <Switch checked={preferences.organizeUngroupedOnly} ariaLabel={t.organizeUngroupedOnly} describedBy="organize-ungrouped-only-description" onChange={(checked) => updatePreferences({ organizeUngroupedOnly: checked })} />
+              </div>
               <div className="space-y-2">
                 <FieldLabel>{t.groupMinTabs}</FieldLabel>
                 <TextInput
