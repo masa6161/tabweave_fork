@@ -278,6 +278,31 @@ async function organizeAutomatically(windowId: number, preferences: Preferences,
 
 const pendingTabEvents = new Map<string, Promise<void>>()
 const pendingCreatedTabIds = new Map<string, Set<number>>()
+const createdTabLoadKey = (tabId: number) => `tabweave.createdTabInitialLoad.${tabId}`
+
+async function retryCreatedTabLoad(tabId: number, changeInfo: chrome.tabs.OnUpdatedInfo) {
+  await queueWindowAutomation(async () => {
+    const key = createdTabLoadKey(tabId)
+    const windowId: unknown = (await chrome.storage.session.get(key))[key]
+    if (typeof windowId !== 'number') return
+    const [tab, preferences] = await Promise.all([
+      chrome.tabs.get(tabId).catch(() => undefined), getPreferences(),
+    ])
+    if (!tab || tab.windowId !== windowId || tab.groupId !== UNGROUPED_ID
+      || !preferences.autoGroupOnCreate || !await isWindowAutoGroupingEnabled(windowId)) {
+      await chrome.storage.session.remove(key)
+      return
+    }
+    try {
+      await applyRulesToCreatedTabs(await getRules(), [tabId], windowId, preferences.groupMinTabs)
+    } finally {
+      // Only the initial load belongs to creation automation. Later navigation
+      // uses the separate update setting, even if the first page did not match.
+      if (changeInfo.status === 'complete') await chrome.storage.session.remove(key)
+    }
+  })
+}
+
 async function groupAfterTabEvent(tabId: number, onCreate = false, attached = false) {
   const eventTab = await chrome.tabs.get(tabId).catch(() => undefined)
   if (!eventTab) return
@@ -298,7 +323,18 @@ async function groupAfterTabEvent(tabId: number, onCreate = false, attached = fa
     if (!window) return
     const preferences = await getPreferences()
     if (onCreate) {
-      if (preferences.autoGroupOnCreate) {
+      if (preferences.autoGroupOnCreate && await isWindowAutoGroupingEnabled(eventTab.windowId)) {
+        // Persist only new tabs still loading. This survives worker suspension,
+        // while a browser restart cannot turn restored tabs into candidates.
+        const loadingTabs: Record<string, number> = {}
+        for (const tabId of createdTabIds) {
+          const tab = await chrome.tabs.get(tabId).catch(() => undefined)
+          if (tab?.windowId === eventTab.windowId && tab.groupId === UNGROUPED_ID
+            && (tab.status !== 'complete' || tab.pendingUrl)) {
+            loadingTabs[createdTabLoadKey(tabId)] = tab.windowId
+          }
+        }
+        if (Object.keys(loadingTabs).length) await chrome.storage.session.set(loadingTabs)
         await applyRulesToCreatedTabs(await getRules(), createdTabIds, eventTab.windowId, preferences.groupMinTabs)
       }
     } else if (preferences.autoGroupOnUpdate) {
@@ -364,6 +400,9 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   const navigationChanged = changeInfo.status === 'complete' || typeof changeInfo.url === 'string'
+  if (navigationChanged || typeof changeInfo.title === 'string' || typeof changeInfo.groupId === 'number') {
+    await retryCreatedTabLoad(tabId, changeInfo)
+  }
   if (!navigationChanged && typeof changeInfo.title !== 'string') return
   scheduleWindowStateReconciliation()
   const preferences = await getPreferences()
@@ -380,9 +419,16 @@ chrome.tabs.onAttached.addListener(async (tabId) => {
   await groupAfterTabEvent(tabId, false, true)
 })
 
-chrome.tabs.onRemoved.addListener(scheduleWindowStateReconciliation)
+const forgetCreatedTabLoad = (tabId: number) => queueWindowAutomation(() => chrome.storage.session.remove(createdTabLoadKey(tabId)))
+chrome.tabs.onRemoved.addListener((tabId) => {
+  scheduleWindowStateReconciliation()
+  return forgetCreatedTabLoad(tabId)
+})
 chrome.tabs.onMoved.addListener(scheduleWindowStateReconciliation)
-chrome.tabs.onDetached.addListener(scheduleWindowStateReconciliation)
+chrome.tabs.onDetached.addListener((tabId) => {
+  scheduleWindowStateReconciliation()
+  return forgetCreatedTabLoad(tabId)
+})
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
   await queueWindowAutomation(() => clearWindowAutoGroupingState(windowId))

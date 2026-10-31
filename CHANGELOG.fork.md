@@ -2,6 +2,22 @@
 
 [Versioning / バージョン管理](./VERSIONING.md) · [Upstream history / upstream の履歴](./CHANGELOG.md)
 
+## 0.8.1-fork.5 - 2026-10-31
+
+Based on upstream TabWeave 0.8.1. Chrome numeric version: `0.8.1.5`.
+
+### 日本語
+
+- タブ作成後に URL・タイトルが確定した場合、登録済みルールによる自動グループ分けを取りこぼす不具合を修正。新規タブの初回読み込み中だけ再判定し、既存タブや後続のページ移動は作成時の整理対象にしない。
+- 初回読み込みの追跡をサービスワーカーの再起動後も維持。手動グループ分け・ウィンドウ間移動・一時停止などを尊重し、既存グループの所属・色・開閉状態を保護。
+- URL・タイトルの遅延、読み込み完了、追跡終了、サービスワーカー再起動の回帰テストを追加。
+
+### English
+
+- Fix missed automatic rule grouping when a newly created tab receives its URL or title after creation. Retry only during its initial load; existing tabs and later navigation remain outside creation automation.
+- Preserve initial-load tracking across service-worker restarts. Respect manual grouping, window detachment, and pauses, while preserving existing group membership, colors, and collapse states.
+- Add regression coverage for delayed URLs and titles, load completion, tracking cancellation, and worker restarts.
+
 ## 0.8.1-fork.4 - 2026-10-28
 
 Based on upstream TabWeave 0.8.1. Chrome numeric version: `0.8.1.4`.

@@ -299,6 +299,88 @@ test('creation respects pauses and evaluates minimum counts within the new tab w
   assert.equal(fixture.calls.every((call) => call.windowId === 10), true)
 })
 
+for (const target of ['url', 'title']) {
+  test(`creation retries the new tab when its ${target} arrives after onCreated`, async () => {
+    await start({
+      tabs: [makeTab(1, 10, 'Manual member', 50), makeTab(2, 10),
+        { ...makeTab(9, 10, ''), url: '', status: 'loading' }],
+      groups: [{ id: 50, windowId: 10, title: 'Research', color: 'red', collapsed: true }],
+      rules: [makeRule('delayed', 'Research', 'Research', { target })],
+      preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false },
+    })
+    const group = { ...fixture.groupMap.get(50) }
+    await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(9))
+    assert.deepEqual(fixture.calls, [])
+    await update(9, target === 'url' ? { url: 'https://example.com/Research' } : { title: 'Research' })
+    await update(9, { status: 'complete' })
+    assert.equal(fixture.tabMap.get(9).groupId, 50)
+    assert.equal(fixture.tabMap.get(1).groupId, 50)
+    assert.equal(fixture.tabMap.get(2).groupId, -1)
+    assert.deepEqual(fixture.groupMap.get(50), group)
+    assert.deepEqual(fixture.calls, [{ type: 'group', windowId: 10, tabIds: [9], groupId: 50 }])
+  })
+}
+
+test('creation retries at load completion and ignores later navigation and older tabs', async () => {
+  await start({
+    tabs: [makeTab(1, 10, 'Old tab'), { ...makeTab(9, 10, ''), status: 'loading' },
+      { ...makeTab(10, 10, ''), status: 'loading' }],
+    preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false },
+  })
+  await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(9))
+  await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(10))
+  fixture.tabMap.get(9).title = 'Research'
+  await update(9, { status: 'complete' })
+  assert.equal(titleOf(9), 'Research')
+  await update(10, { status: 'complete' })
+  await update(10, { title: 'Research' })
+  await update(1, { title: 'Research', status: 'complete' })
+  assert.equal(fixture.tabMap.get(10).groupId, -1)
+  assert.equal(fixture.tabMap.get(1).groupId, -1)
+})
+
+for (const stop of ['manual grouping', 'detachment', 'pause', 'disable']) {
+  test(`creation stops tracking the initial load after ${stop}`, async () => {
+    await start({
+      tabs: [makeTab(1, 10, 'Manual', 50), { ...makeTab(9, 10, ''), status: 'loading' }],
+      groups: [{ id: 50, windowId: 10, title: 'Manual choice' }],
+      preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false },
+    })
+    await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(9))
+    if (stop === 'manual grouping') {
+      await update(9, { groupId: 50 })
+      await update(9, { groupId: -1 })
+    } else if (stop === 'detachment') {
+      await fixture.chrome.tabs.onDetached.emit(9, { oldWindowId: 10, oldPosition: 1 })
+    } else if (stop === 'pause') {
+      await toggle(10, false)
+      await update(9, { title: 'Research' })
+      await toggle(10, true)
+    } else {
+      fixture.chrome.storage.sync.data.get('tabweave.preferences').autoGroupOnCreate = false
+      await update(9, { title: 'Research' })
+      fixture.chrome.storage.sync.data.get('tabweave.preferences').autoGroupOnCreate = true
+    }
+    await update(9, { title: 'Research', status: 'complete' })
+    assert.equal(fixture.tabMap.get(9).groupId, -1)
+    assert.deepEqual(fixture.calls, [])
+  })
+}
+
+test('initial-load tracking survives a service-worker restart', async () => {
+  await start({
+    tabs: [{ ...makeTab(9, 10, ''), status: 'loading' }],
+    preferences: { autoGroupOnCreate: true, autoGroupOnUpdate: false },
+  })
+  await fixture.chrome.tabs.onCreated.emit(fixture.tabMap.get(9))
+  for (const namespace of [fixture.chrome.tabs, fixture.chrome.windows, fixture.chrome.runtime, fixture.chrome.storage]) {
+    for (const value of Object.values(namespace)) value?.listeners?.clear()
+  }
+  await import(`../src/background.ts?worker=${++workerId}`)
+  await update(9, { title: 'Research', status: 'complete' })
+  assert.equal(titleOf(9), 'Research')
+})
+
 test('opening extension settings preserves manually added tabs and every existing group', async () => {
   await start({
     tabs: [makeTab(1, 10, 'Research', 50), makeTab(4, 10, 'Manually added', 50),
